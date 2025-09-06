@@ -147,4 +147,5 @@ results/
 
 # Test outputs
 test_output/
+test_data/
 performance_test_results_*.json
