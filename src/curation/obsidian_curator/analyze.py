@@ -7,55 +7,74 @@ def get_llm_relevance_score(text, title, cfg):
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
-    prompt = f"""You are evaluating content for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs.
+    prompt = """You are a strict professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. Read TITLE and CONTENT, then score conservatively using the rubric. Require concrete professional substance (data, methods, frameworks, case evidence). Do not be keyword-led.
 
-TITLE: {title}
-CONTENT: {text_sample}
+    TITLE: {title}
+    CONTENT: {text_sample}
+
+    Scoring rubric
+    - Relevance (0.00–1.00)
+    - 0.70–1.00: Directly addresses an item in RELEVANT CONTENT with specific technical/financial/governance detail (metrics, models, legislation, contracts, case studies).
+    - 0.31–0.69: Related but generic or shallow; lacks technical specifics.
+    - 0.00–0.30: Matches IRRELEVANT CONTENT or has no professional depth.
+    - Caps: if CONTENT < 100 words, mostly navigation/boilerplate, or only filenames/links without context → relevance ≤ 0.40.
+    - Credibility (0.00–1.00)
+    - 0.80–1.00: Multilaterals/government/pro bodies, peer-review, official stats, primary docs, reputable outlets with citations.
+    - 0.50–0.79: Trade press/technical blogs with sources; identifiable authors.
+    - 0.00–0.49: Anonymous/marketing/social posts/unverified claims.
+    - Cap credibility ≤ 0.50 if no author/date/source.
+    - Novelty (0.00–1.00)
+    - 0.80–1.00: Distinctive analysis/data/methods, new policy/market shifts, lessons learned.
+    - 0.50–0.79: Familiar material with some non-trivial insight.
+    - 0.00–0.49: Generic definitions or repetitive content.
 
     RELEVANT CONTENT (score 0.7-1.0):
-        1. Finance & Economics
-        Technical and financial analysis of infrastructure projects, PPPs, and concessions
-        M&A activity, investment flows, and market intelligence in infrastructure sectors
-        Financing instruments, blended finance, and project finance structures
-        Infrastructure economics, value for money assessments, and fiscal impacts
-        2. Policy & Governance
-        Policy documents, regulatory frameworks, and legislative frameworks
-        International development policies, multilateral guidelines, and donor frameworks
-        Procurement strategies, contracting models, PPP governance, and institutional practices
-        Historical precedents, comparative case law, and accumulated professional know-how
-        3. Risk & Sustainability
-        Risk management, uncertainty modeling, and scenario planning in infrastructure delivery
-        Sustainability, resilience, climate adaptation, and environmental impact assessments
-        4. Technology & Innovation
-        Innovation, digital transformation, and smart infrastructure systems
-        Embedded technologies: IoT, intelligent buildings, monitoring and control systems
-        Data-driven insights: Big Data, AI, predictive analytics, and scenario modeling
-        5. Knowledge & Professional Practice
-        Industry reports from professional bodies and government agencies
-        Infrastructure project case studies and evaluations with technical and operational depth
-        Professional insights, expert commentary, and applied technical analysis
-        News and media sources with financial, technical, or strategic relevance
-        Knowledge management practices, methodologies, and professional standards
-        Online platforms, data repositories, and embedded knowledge systems for infrastructure
-        Historical precedents, comparative case law, and accumulated professional know-how
+    - Finance & Economics
+    - Technical and financial analysis of infrastructure projects, PPPs, and concessions
+    - M&A activity, investment flows, and market intelligence in infrastructure sectors
+    - Financing instruments, blended finance, and project finance structures
+    - Infrastructure economics, value for money assessments, and fiscal impacts
+    - Policy & Governance
+    - Policy documents, regulatory frameworks, and legislative frameworks
+    - International development policies, multilateral guidelines, and donor frameworks
+    - Procurement strategies, contracting models, PPP governance, and institutional practices
+    - Historical precedents, comparative case law, and accumulated professional know-how
+    - Risk & Sustainability
+    - Risk management, uncertainty modeling, and scenario planning in infrastructure delivery
+    - Sustainability, resilience, climate adaptation, and environmental impact assessments
+    - Technology & Innovation
+    - Innovation, digital transformation, and smart infrastructure systems
+    - Embedded technologies: IoT, intelligent buildings, monitoring and control systems
+    - Data-driven insights: Big Data, AI, predictive analytics, and scenario modeling
+    - Knowledge & Professional Practice
+    - Industry reports from professional bodies and government agencies
+    - Infrastructure project case studies and evaluations with technical and operational depth
+    - Professional insights, expert commentary, and applied technical analysis
+    - News and media sources with financial, technical, or strategic relevance
+    - Knowledge management practices, methodologies, and professional standards
+    - Online platforms, data repositories, and embedded knowledge systems for infrastructure
+    - Historical precedents, comparative case law, and accumulated professional know-how
 
-    IRRELEVANT CONTENT (score 0.0-0.3):
-    - Personal bills, receipts, service calls
-    - Utility readings, consumption data, household records
-    - Casual notes, social media, random thoughts
-    - Contact info, phone numbers, basic records
-    - Shopping, marketplace apps (Wallapop, Vibbo), consumer services
-    - Social networking, travel, appointments
-    - Generic news without technical substance
-    - Any content without professional technical depth
+    IRRELEVANT CONTENT (score 0.0–0.3):
+    - Bills/receipts, invoices, service calls, warranties
+    - Utility readings, household/consumption logs, appliance records
+    - Contact cards, bare phone/email lists, business cards without context
+    - Casual notes, personal diaries, social posts, random thoughts
+    - Shopping/marketplace (Wallapop, Vibbo), consumer services, promo emails
+    - Travel/appointments/calendars, confirmations, booking codes
+    - Generic news headlines without technical/financial specifics
+    - Navigation/cookie banners, menu/sidebar scrapings, clipper boilerplate
+    - Short fragments (<50 words) or placeholders without substantive content
+    - Code/config/logs unrelated to infrastructure/PPP practice
 
-Return JSON:
-- "relevance": 0.0-1.0 (professional relevance)
-- "credibility": 0.0-1.0 (source quality, technical depth)
-- "novelty": 0.0-1.0 (unique insights, strategic value)
-- "reasoning": Brief explanation
-
-Be strict: only high-quality professional content scores above 0.6."""
+    Output requirements
+    - Return a single JSON object (no prose, no markdown, no code fences) with exactly these keys in this order:
+    - "relevance": number in [0,1], rounded to two decimals
+    - "credibility": number in [0,1], rounded to two decimals
+    - "novelty": number in [0,1], rounded to two decimals
+    - "reasoning": string ≤ 30 words explaining the scores
+    - If relevance ≥ 0.70, explicitly name the satisfied RELEVANT category by number and name in "reasoning".
+    - If CONTENT is empty or only links/filenames with no context, set relevance ≤ 0.25 and explain briefly."""
 
     try:
         result = chat_json(cfg['models']['fast'], 
