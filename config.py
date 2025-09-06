@@ -169,8 +169,8 @@ def get_curation_config():
             ]
         },
         'decision': {
-            'keep_threshold': 0.75,  # Ultra-strict threshold for only the highest quality professional content
-            'gray_margin': 0.05      # Very small gray zone for manual review (0.70-0.75 = triage)
+            'keep_threshold': 0.50,  # Threshold aligned with new scoring rubric
+            'gray_margin': 0.10      # Gray zone for manual review (0.40-0.50 = triage)
         },
         'priorities': ["pdf","image","text"],
         'summaries': {

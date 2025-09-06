@@ -7,17 +7,20 @@ def get_llm_relevance_score(text, title, cfg):
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
-    prompt = """You are a strict professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. Read TITLE and CONTENT, then score conservatively using the rubric. Require concrete professional substance (data, methods, frameworks, case evidence). Do not be keyword-led.
+    prompt = """You are a professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. 
+
+    CRITICAL: Content related to INFRASTRUCTURE PROJECTS, PPPs, CONCESSIONS, PROJECT FINANCE, DIGITAL TRANSFORMATION, or ACADEMIC CONFERENCES on these topics should score above 0.5.
 
     TITLE: {title}
     CONTENT: {text_sample}
 
     Scoring rubric
     - Relevance (0.00–1.00)
-    - 0.70–1.00: Directly addresses an item in RELEVANT CONTENT with specific technical/financial/governance detail (metrics, models, legislation, contracts, case studies).
-    - 0.31–0.69: Related but generic or shallow; lacks technical specifics.
-    - 0.00–0.30: Matches IRRELEVANT CONTENT or has no professional depth.
-    - Caps: if CONTENT < 100 words, mostly navigation/boilerplate, or only filenames/links without context → relevance ≤ 0.40.
+    - 0.80–1.00: Directly addresses RELEVANT CONTENT with specific technical/financial/governance detail (metrics, models, legislation, contracts, case studies).
+    - 0.50–0.79: Related to RELEVANT CONTENT with some professional substance or context.
+    - 0.20–0.49: Tangentially related but lacks professional depth or specifics.
+    - 0.00–0.19: Matches IRRELEVANT CONTENT or has no professional depth.
+    - Caps: if CONTENT < 100 words, mostly navigation/boilerplate, or only filenames/links without context → relevance ≤ 0.30.
     - Credibility (0.00–1.00)
     - 0.80–1.00: Multilaterals/government/pro bodies, peer-review, official stats, primary docs, reputable outlets with citations.
     - 0.50–0.79: Trade press/technical blogs with sources; identifiable authors.
@@ -54,6 +57,9 @@ def get_llm_relevance_score(text, title, cfg):
     - Knowledge management practices, methodologies, and professional standards
     - Online platforms, data repositories, and embedded knowledge systems for infrastructure
     - Historical precedents, comparative case law, and accumulated professional know-how
+    - Academic conferences, symposiums, and research proceedings on infrastructure topics
+    - Professional development materials and training resources for infrastructure practitioners
+    - Research papers, case studies, and technical reports from infrastructure organizations
 
     IRRELEVANT CONTENT (score 0.0–0.3):
     - Bills/receipts, invoices, service calls, warranties
@@ -66,6 +72,10 @@ def get_llm_relevance_score(text, title, cfg):
     - Navigation/cookie banners, menu/sidebar scrapings, clipper boilerplate
     - Short fragments (<50 words) or placeholders without substantive content
     - Code/config/logs unrelated to infrastructure/PPP practice
+    - Personal identification documents (passports, IDs, insurance numbers)
+    - Government forms unrelated to infrastructure projects
+    - Personal correspondence or administrative documents
+    - Any content NOT directly about infrastructure, PPPs, or digital transformation
 
     Output requirements
     - Return a single JSON object (no prose, no markdown, no code fences) with exactly these keys in this order:
@@ -124,8 +134,8 @@ def analyze_features(content, meta, cfg, relevance_score=None):
 
 def score_usefulness(feats, cfg):
     """Score usefulness using LLM-assessed professional relevance."""
-    # LLM-driven weights - let the AI assessment dominate
-    w = dict(relevance=0.60, credibility=0.25, novelty=0.10, richness=0.05)
+    # More balanced weights - relevance is key but not overwhelming
+    w = dict(relevance=0.70, credibility=0.20, novelty=0.05, richness=0.05)
     
     # Simple weighted combination of LLM scores plus content richness
     score = (w['relevance'] * feats['relevance'] +
