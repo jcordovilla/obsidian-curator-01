@@ -140,16 +140,37 @@ def get_curation_config():
             'out_assets': CURATION_ASSETS_PATH
         },
         'models': {
-            'fast': 'phi3:mini',
+            'fast': 'llama3.1:8b',  # Better model for professional assessment
             'main': 'llama3.1:8b',
             'embed': 'nomic-embed-text'
         },
         'taxonomy': {
-            'categories': ["PPP","Concessions","Roads","Water","Energy","ESG","Governance","Policy","Finance","LATAM","Spain","Indonesia","Africa"]
+            'categories': [
+                # Core Infrastructure & PPP
+                "Infrastructure Investment", "PPP/P3", "Concessions", "Project Finance", "Risk Management",
+                
+                # Sectors
+                "Roads & Transport", "Water & Wastewater", "Energy", "Hospitals & Social Infrastructure", "Railways",
+                
+                # Digital & Innovation
+                "Digital Transformation", "AI & Machine Learning", "Digital Twins", "Geospatial Data", "Process Automation",
+                
+                # Governance & Strategy
+                "Governance & Transparency", "Policy & Regulation", "Strategic Planning", "Asset Management",
+                
+                # Technical & Analysis
+                "Technical Due Diligence", "Feasibility Studies", "Market Intelligence", "Critical Infrastructure Protection",
+                
+                # Geographic & Sectoral Focus
+                "Spain", "Europe", "LATAM", "International Development",
+                
+                # Cross-cutting Themes
+                "ESG & Sustainability", "Climate Resilience", "Innovation & R&D", "Capacity Building"
+            ]
         },
         'decision': {
-            'keep_threshold': 0.68,
-            'gray_margin': 0.05
+            'keep_threshold': 0.75,  # Ultra-strict threshold for only the highest quality professional content
+            'gray_margin': 0.05      # Very small gray zone for manual review (0.70-0.75 = triage)
         },
         'priorities': ["pdf","image","text"],
         'summaries': {

@@ -51,17 +51,28 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             meta, body = parse_front_matter(note_path)
             assets = detect_assets(body, attachments)
             primary = choose_primary(assets, body, cfg['priorities'])
-            content = extract_content(primary, assets, body, meta.get('language'))
+            content = extract_content(primary, assets, body, meta.get('language'), attachments)
+            
+            # Early classification to get relevance score for better filtering
+            cats, tags, ents = classify_json(content, meta, cfg)
+            
+            # Use LLM-powered analysis for professional relevance
             feats = analyze_features(content, meta, cfg)
             score = score_usefulness(feats, cfg)
             decision = decide(score, cfg['decision'])
+            
+            # Log LLM reasoning for transparency
+            llm_reasoning = feats.get('llm_reasoning', 'No reasoning available')
+            logger.debug(f'LLM Assessment for {note_path}: {llm_reasoning}')
+            
             if decision == 'triage':
                 if not dry_run:
                     enqueue_triage(note_path, feats, score)
                 logger.info(f'TRIAGE: {note_path} (score={score:.3f})'); continue
             if decision == 'discard':
                 logger.info(f'DISCARD: {note_path} (score={score:.3f})'); continue
-            cats, tags, ents = classify_json(content, meta, cfg)
+                
+            # Generate summary for kept notes
             summary = summarize_content(content, meta, cats, cfg)
             
             if not dry_run:
