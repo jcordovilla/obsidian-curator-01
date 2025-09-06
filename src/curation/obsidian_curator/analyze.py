@@ -7,7 +7,7 @@ def get_llm_relevance_score(text, title, cfg):
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
-    prompt = """You are a professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. 
+    prompt = f"""You are a professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. 
 
     CRITICAL: Content related to INFRASTRUCTURE PROJECTS, PPPs, CONCESSIONS, PROJECT FINANCE, DIGITAL TRANSFORMATION, or ACADEMIC CONFERENCES on these topics should score above 0.5.
 
@@ -96,7 +96,7 @@ def get_llm_relevance_score(text, title, cfg):
         return {
             'relevance': min(1.0, max(0.0, result.get('relevance', 0.5))),
             'credibility': min(1.0, max(0.0, result.get('credibility', 0.5))),
-            'novelty': min(1.0, max(0.0, result.get('novelty', 0.5))),
+            'novelty': min(1.0, max(0.0, result.get('novelty', result.get('novelity', 0.5)))),  # Handle typo in LLM response
             'reasoning': result.get('reasoning', 'No reasoning provided')
         }
     except Exception as e:
