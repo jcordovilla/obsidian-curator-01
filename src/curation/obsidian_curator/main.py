@@ -1,5 +1,5 @@
 from loguru import logger
-import argparse, os, yaml
+import argparse, os, yaml, datetime, json
 import sys
 from pathlib import Path
 
@@ -26,14 +26,25 @@ def load_cfg(path='config.yaml'):
         with open(path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
 
-def run(cfg, vault=None, attachments=None, out_notes=None):
+def enqueue_triage(note_path, feats, score):
+    os.makedirs(".metadata", exist_ok=True)
+    with open(".metadata/triage.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"note":note_path,"score":score,"reason":"gray-zone"})+"\n")
+
+def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
+    # Set up logging with run ID
+    os.makedirs("logs", exist_ok=True)
+    run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    logger.add(f"logs/curation-{run_id}.log", level="INFO", encoding="utf-8", enqueue=True)
+    
     vault = vault or cfg['paths']['vault']
     attachments = attachments or cfg['paths']['attachments']
     out_notes = out_notes or cfg['paths']['out_notes']
 
-    os.makedirs(out_notes, exist_ok=True)
-    EmbeddingIndex.init('.metadata/faiss.index', model=cfg['models']['embed'])
-    Manifest.init('.metadata/manifest.jsonl')
+    if not dry_run:
+        os.makedirs(out_notes, exist_ok=True)
+        EmbeddingIndex.init('.metadata/faiss.index', model=cfg['models']['embed'])
+        Manifest.init('.metadata/manifest.jsonl')
 
     for note_path in iter_markdown_notes(vault):
         try:
@@ -45,15 +56,19 @@ def run(cfg, vault=None, attachments=None, out_notes=None):
             score = score_usefulness(feats, cfg)
             decision = decide(score, cfg['decision'])
             if decision == 'triage':
+                if not dry_run:
+                    enqueue_triage(note_path, feats, score)
                 logger.info(f'TRIAGE: {note_path} (score={score:.3f})'); continue
             if decision == 'discard':
                 logger.info(f'DISCARD: {note_path} (score={score:.3f})'); continue
             cats, tags, ents = classify_json(content, meta, cfg)
             summary = summarize_content(content, meta, cats, cfg)
-            write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg)
-            EmbeddingIndex.add(note_path, content.get('embedding'))
-            Manifest.update(note_path, score, decision, primary)
-            logger.success(f'KEPT: {note_path} (score={score:.3f})')
+            
+            if not dry_run:
+                write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg)
+                EmbeddingIndex.add(note_path, content.get('embedding'))
+                Manifest.update(note_path, score, decision, primary)
+            logger.success(f'KEPT{ " (dry-run)" if dry_run else "" }: {note_path} (score={score:.3f})')
         except Exception as e:
             logger.exception(f'Error processing {note_path}: {e}')
 
@@ -63,9 +78,10 @@ def cli():
     p.add_argument('--attachments', default=None)
     p.add_argument('--out', dest='out_notes', default=None)
     p.add_argument('--config', default='config.yaml')
+    p.add_argument('--dry-run', action='store_true')
     args = p.parse_args()
     cfg = load_cfg(args.config)
-    run(cfg, args.vault, args.attachments, args.out_notes)
+    run(cfg, args.vault, args.attachments, args.out_notes, dry_run=args.dry_run)
 
 if __name__ == '__main__':
     cli()

@@ -136,6 +136,9 @@ tmp/
 .DS_Store
 .vscode/
 .idea/
+.metadata/
+curated/
+logs/
 
 # Output directories
 output/

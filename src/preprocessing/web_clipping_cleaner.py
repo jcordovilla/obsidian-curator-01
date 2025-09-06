@@ -259,3 +259,9 @@ class WebClippingCleaner:
         
         # If multiple web indicators present, likely a web clipping
         return indicator_count >= 2
+
+def clean_html_like_clipping(content: str) -> str:
+    """Simple function to clean web clipping content."""
+    cleaner = WebClippingCleaner()
+    cleaned, _ = cleaner.clean_web_clipping(content, {})
+    return cleaned
