@@ -101,12 +101,10 @@ obsidian-curator-01/
 │   └── update_config.py          # Configuration synchronization
 ├── tests/                        # Test files
 │   └── test_performance.py       # Performance comparison tests
-├── docs/                         # Documentation and reports
-│   ├── analysis_output/          # Analysis results
-│   ├── performance_test_results_*.json  # Test results
-│   ├── PERFORMANCE_TEST_SUMMARY.md      # Performance analysis
-│   ├── PREPROCESSING_README.md          # Detailed preprocessing guide
-│   └── PROJECT_SUMMARY.md               # Project overview
+├── docs/                         # Documentation
+│   ├── USAGE.md                  # Complete usage guide
+│   ├── TECHNICAL_SPECIFICATION.md # Technical documentation for coding LLMs
+│   └── analysis_output/          # Analysis results and data
 ├── config.py                     # Main configuration (single source of truth)
 ├── config.yaml                   # Curation module configuration (auto-generated)
 ├── requirements.txt              # Python dependencies
@@ -272,10 +270,9 @@ python scripts/update_config.py
 
 ## 📚 Documentation
 
-- **[Preprocessing Guide](docs/PREPROCESSING_README.md)**: Detailed preprocessing instructions
-- **[Performance Analysis](docs/PERFORMANCE_TEST_SUMMARY.md)**: Comprehensive performance results
-- **[Project Summary](docs/PROJECT_SUMMARY.md)**: Complete project overview
-- **[Analysis Results](docs/analysis_output/)**: Technical characterization and analysis
+- **[Usage Guide](docs/USAGE.md)**: Complete usage instructions and examples
+- **[Technical Specification](docs/TECHNICAL_SPECIFICATION.md)**: Comprehensive technical documentation for developers and coding LLMs
+- **[Analysis Results](docs/analysis_output/)**: Technical characterization and analysis data
 
 ## 🤝 Contributing
 
