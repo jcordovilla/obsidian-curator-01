@@ -17,6 +17,8 @@ Obsidian Curator is a powerful tool designed to clean and standardize Obsidian v
 - **📅 Metadata Standardization**: Converts Evernote dates to ISO format, normalizes tags
 - **🔍 Quality Validation**: Comprehensive quality assessment and reporting
 - **⚡ Batch Processing**: Efficient parallel processing with configurable workers
+- **🎯 Content Curation**: Advanced content analysis, scoring, and decision making
+- **🤖 AI-Powered**: LLM integration for content analysis and summarization
 - **🛡️ Safety First**: Automatic backups and rollback capabilities
 
 ## 🚀 Quick Start
@@ -53,12 +55,17 @@ Obsidian Curator is a powerful tool designed to clean and standardize Obsidian v
    PREPROCESSING_OUTPUT_PATH = "/path/to/output/vault"
    ```
 
-2. **Run preprocessing**
+2. **Update configuration files** (if needed):
+   ```bash
+   python scripts/update_config.py
+   ```
+
+3. **Run preprocessing**
    ```bash
    python scripts/preprocess.py
    ```
 
-3. **View results** in your output directory
+4. **View results** in your output directory
 
 ## 📁 Project Structure
 
@@ -69,6 +76,17 @@ obsidian-curator-01/
 │   │   ├── content_analyzer.py   # Content analysis and statistics
 │   │   ├── note_sampler.py       # Stratified sampling
 │   │   └── technical_characterizer.py  # Technical characterization
+│   ├── curation/                 # Content curation pipeline
+│   │   └── obsidian_curator/     # AI-powered curation module
+│   │       ├── main.py           # Main curation pipeline
+│   │       ├── analyze.py        # Content analysis and scoring
+│   │       ├── classify.py       # Content classification
+│   │       ├── extractors.py     # Content extraction
+│   │       ├── llm.py            # LLM integration
+│   │       ├── store.py          # Embedding storage
+│   │       ├── summarize.py      # Content summarization
+│   │       ├── utils.py          # Utility functions
+│   │       └── writer.py         # Output generation
 │   ├── preprocessing/            # Preprocessing pipeline
 │   │   ├── batch_processor.py    # Main processing pipeline
 │   │   ├── content_classifier.py # Note classification
@@ -79,7 +97,8 @@ obsidian-curator-01/
 │       └── file_handler.py       # File operations
 ├── scripts/                      # Executable scripts
 │   ├── main.py                   # Analysis and characterization
-│   └── preprocess.py             # Main preprocessing script
+│   ├── preprocess.py             # Main preprocessing script
+│   └── update_config.py          # Configuration synchronization
 ├── tests/                        # Test files
 │   └── test_performance.py       # Performance comparison tests
 ├── docs/                         # Documentation and reports
@@ -88,20 +107,52 @@ obsidian-curator-01/
 │   ├── PERFORMANCE_TEST_SUMMARY.md      # Performance analysis
 │   ├── PREPROCESSING_README.md          # Detailed preprocessing guide
 │   └── PROJECT_SUMMARY.md               # Project overview
-├── config.py                     # Configuration settings
+├── config.py                     # Main configuration (single source of truth)
+├── config.yaml                   # Curation module configuration (auto-generated)
 ├── requirements.txt              # Python dependencies
 └── README.md                     # This file
 ```
 
 ## 🔧 Configuration
 
+### Unified Configuration System
+
+The project uses a **unified configuration system** where `config.py` is the single source of truth for all paths and settings:
+
+- **`config.py`**: Main configuration file with all paths and settings
+- **`config.yaml`**: Auto-generated from `config.py` for the curation module
+- **No duplication**: Change paths in one place, sync everywhere
+
+### Key Configuration
+
 Edit `config.py` to customize:
 
-- **Vault paths**: Input and output directories
+- **Vault paths**: Input and output directories (absolute paths)
 - **Sample sizes**: For analysis and testing
 - **Processing parameters**: Batch sizes, worker threads
 - **Boilerplate patterns**: Custom patterns for content cleaning
 - **Metadata fields**: Standardization rules
+
+### Configuration Management
+
+```bash
+# Update config.yaml after changing config.py
+python scripts/update_config.py
+
+# View current configuration
+python scripts/update_config.py
+```
+
+### Path Configuration
+
+```python
+# Main vault path (single source of truth)
+VAULT_PATH = "/path/to/your/obsidian/vault"
+
+# Derived paths (automatically calculated)
+PREPROCESSING_OUTPUT_PATH = "/path/to/processed/vault"
+CURATION_OUTPUT_PATH = "/path/to/curated/vault"
+```
 
 ## 📊 Performance Results
 
@@ -159,11 +210,31 @@ python scripts/preprocess.py --batch-size 100 --workers 8
 python scripts/preprocess.py --categories web_clipping personal_note
 ```
 
+### Curation Module
+
+```bash
+# Run the curation pipeline (content analysis and curation)
+python -m src.curation.obsidian_curator.main
+
+# With custom paths
+python -m src.curation.obsidian_curator.main --vault /path/to/vault --out /path/to/output
+```
+
 ### Performance Testing
 
 ```bash
 # Run performance comparison test
 python tests/test_performance.py --sample-size 50
+```
+
+### Configuration Management
+
+```bash
+# Update config.yaml after changing config.py
+python scripts/update_config.py
+
+# View current configuration
+python scripts/update_config.py
 ```
 
 ## 🔍 What Gets Cleaned
@@ -196,6 +267,8 @@ python tests/test_performance.py --sample-size 50
 - **Dry Run Mode**: Test processing without making changes
 - **Validation**: Comprehensive quality and integrity checks
 - **Error Handling**: Robust error recovery and reporting
+- **Unified Configuration**: Single source of truth prevents configuration errors
+- **Path Validation**: Automatic validation of vault and output paths
 
 ## 📚 Documentation
 

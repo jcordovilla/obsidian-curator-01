@@ -1,0 +1,40 @@
+decision:
+  gray_margin: 0.05
+  keep_threshold: 0.68
+language:
+  default: auto
+models:
+  embed: nomic-embed-text
+  fast: phi3:mini
+  main: llama3.1:8b
+paths:
+  attachments: /Users/jose/Documents/Obsidian/Evermd/attachments
+  out_assets: /Users/jose/Documents/Obsidian/Ever-curated/assets
+  out_notes: /Users/jose/Documents/Obsidian/Ever-curated/notes
+  vault: /Users/jose/Documents/Obsidian/Evermd
+priorities:
+- pdf
+- image
+- text
+summaries:
+  image:
+    bullets: 6
+    max_tokens: 500
+  pdf:
+    bullets: 8
+    max_tokens: 900
+taxonomy:
+  categories:
+  - PPP
+  - Concessions
+  - Roads
+  - Water
+  - Energy
+  - ESG
+  - Governance
+  - Policy
+  - Finance
+  - LATAM
+  - Spain
+  - Indonesia
+  - Africa
