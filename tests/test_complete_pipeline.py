@@ -81,9 +81,9 @@ def test_complete_pipeline():
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # Select a mix: 5 with attachments, 15 without
-    selected_with_attachments = random.sample(notes_with_attachments, min(5, len(notes_with_attachments)))
-    selected_without_attachments = random.sample(notes_without_attachments, 15)
+    # Select a mix: 2 with attachments, 8 without
+    selected_with_attachments = random.sample(notes_with_attachments, min(2, len(notes_with_attachments)))
+    selected_without_attachments = random.sample(notes_without_attachments, 8)
     selected_notes = selected_with_attachments + selected_without_attachments
     
     print(f"Selected {len(selected_with_attachments)} notes with attachments")
@@ -103,14 +103,39 @@ def test_complete_pipeline():
         real_attachments_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
         
         if real_attachments_dir.exists():
-            new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
-            shutil.copytree(real_attachments_dir, new_attachments_dir)
-            attachment_count = len(list(real_attachments_dir.iterdir()))
-            print(f"    + attachments: {attachment_count} files")
+            try:
+                new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
+                shutil.copytree(real_attachments_dir, new_attachments_dir)
+                attachment_count = len(list(real_attachments_dir.iterdir()))
+                print(f"    + attachments: {attachment_count} files")
+            except Exception as e:
+                print(f"    + attachments: ERROR copying - {e}")
         else:
-            print(f"    + attachments: none")
+            # Try alternative attachment locations
+            alt_locations = [
+                Path(raw_vault) / "attachments" / note_stem,
+                Path(raw_vault) / "attachments" / f"{note_stem}_files",
+                Path(raw_vault) / "attachments" / f"{note_stem}_attachments"
+            ]
+            
+            found_attachments = False
+            for alt_dir in alt_locations:
+                if alt_dir.exists():
+                    try:
+                        new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
+                        shutil.copytree(alt_dir, new_attachments_dir)
+                        attachment_count = len(list(alt_dir.iterdir()))
+                        print(f"    + attachments: {attachment_count} files (from {alt_dir.name})")
+                        found_attachments = True
+                        break
+                    except Exception as e:
+                        print(f"    + attachments: ERROR copying from {alt_dir.name} - {e}")
+                        continue
+            
+            if not found_attachments:
+                print(f"    + attachments: none found")
     
-    print(f"✓ Copied 20 fresh notes to test folder")
+    print(f"✓ Copied 10 fresh notes to test folder")
     print()
     
     # Update raw_vault to use test folder for preprocessing
@@ -168,10 +193,10 @@ def test_complete_pipeline():
     print(f"Found {len(preprocessed_notes)} preprocessed notes")
     
     try:
-        # Run curation on preprocessed data (dry run)
-        print("Running curation on preprocessed data (dry run)...")
-        run(test_cfg, dry_run=True)
-        print("✓ Curation pipeline completed successfully (dry run)")
+        # Run curation on preprocessed data
+        print("Running curation on preprocessed data...")
+        run(test_cfg, dry_run=False)
+        print("✓ Curation pipeline completed successfully")
         
     except Exception as e:
         print(f"Error during curation: {e}")

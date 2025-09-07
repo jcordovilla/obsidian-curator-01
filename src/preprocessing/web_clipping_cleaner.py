@@ -354,7 +354,23 @@ def remove_boilerplate_sections(content_lines: List[str]) -> List[str]:
             'social media tools',
             'more sharing',
             'sharing services',
-            'share services'
+            'share services',
+            'post your say',
+            'selected comments',
+            'comments',
+            'follow',
+            'post comment',
+            'powered by',
+            'look for more jobs',
+            'latest travelog',
+            'top travelog',
+            'share your travel',
+            'find more about',
+            'news',
+            'views',
+            'life',
+            'services',
+            'pt.'
         ]):
             # Skip this section until we find a clear end or another main heading
             skip_section = True
@@ -628,6 +644,42 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
         r'^\s*[Mm]ore [Ss]haring.*',
         r'^\s*[Ss]hare.*[Ss]ervices.*',
         r'^\s*[Ss]haring [Tt]ools.*',
+        
+        # Header navigation and logos
+        r'^\s*!\[\[.*\]\].*\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Hh]eadlines.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Aa]rchipelago.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Jj]akarta.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Pp]hotos.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Vv]ideos.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Oo]utlook.*\]\(http[^)]+\)\s*$',
+        
+        # Footer sections
+        r'^\s*##\s*[Pp]ost [Yy]our [Ss]ay.*',
+        r'^\s*[Ss]elected comments.*',
+        r'^\s*\d+\s+comments.*',
+        r'^\s*\+\s*[Ff]ollow.*',
+        r'^\s*[Pp]ost comment as.*',
+        r'^\s*\[Powered by.*\]\(http[^)]+\)\s*$',
+        
+        # Related articles and news sections
+        r'^\s*\*\s*\d+\s*$',
+        r'^\s*\*\s*\[.*\]\(http[^)]+\)\s*$',
+        r'^\s*[Ll]ook for more jobs.*',
+        r'^\s*\[Look for more jobs.*\]\(http[^)]+\)\s*$',
+        
+        # Travel and entertainment sections
+        r'^\s*[Ll]atest TRAVELOG.*',
+        r'^\s*[Tt]op TRAVELOG.*',
+        r'^\s*[Ss]hare your travel experience.*',
+        r'^\s*[Ff]ind more about your.*',
+        
+        # Footer navigation
+        r'^\s*####\s*[Nn]ews.*',
+        r'^\s*####\s*[Vv]iews.*',
+        r'^\s*####\s*[Ll]ife.*',
+        r'^\s*####\s*[Ss]ervices.*',
+        r'^\s*PT\.\s+.*',
         
         # Duplicate URLs and tracking parameters
         r'^<http[^>]*utm_[^>]*>$',
