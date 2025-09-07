@@ -7,18 +7,47 @@ import yaml
 from pathlib import Path
 
 # Vault configuration
-VAULT_PATH = "/Users/jose/Documents/Obsidian/Evermd"
+RAW_VAULT_PATH = "/Users/jose/Documents/Obsidian/Evermd"  # Original notes + attachments
+PREPROCESSED_VAULT_PATH = "/Users/jose/Documents/Obsidian/Ever-preprocessed"  # Cleaned notes + attachments
+CURATED_VAULT_PATH = "/Users/jose/Documents/Obsidian/Ever-curated"  # Enhanced notes + attachments
+
+# Test data configuration
+TEST_RAW_PATH = "tests/test_data/raw"  # Test raw notes + attachments
+TEST_PREPROCESSED_PATH = "tests/test_data/preprocessed"  # Test preprocessed notes + attachments
+TEST_CURATED_PATH = "tests/test_data/curated"  # Test curated notes + attachments
+
 SAMPLE_SIZE = 200
 OUTPUT_DIR = "analysis_output"
 
-# Preprocessing output configuration
-PREPROCESSING_OUTPUT_PATH = "/Users/jose/Documents/Obsidian/Ever-output"
+# Legacy aliases for backward compatibility
+VAULT_PATH = RAW_VAULT_PATH
+PREPROCESSING_OUTPUT_PATH = PREPROCESSED_VAULT_PATH
+CURATION_OUTPUT_PATH = CURATED_VAULT_PATH
 
-# Curation output paths (derived from vault path)
-CURATION_OUTPUT_PATH = "/Users/jose/Documents/Obsidian/Ever-curated"
-CURATION_NOTES_PATH = os.path.join(CURATION_OUTPUT_PATH, "notes")
-CURATION_ASSETS_PATH = os.path.join(CURATION_OUTPUT_PATH, "assets")
-CURATION_ATTACHMENTS_PATH = os.path.join(VAULT_PATH, "attachments")
+# Specific paths within each vault
+RAW_NOTES_PATH = os.path.join(RAW_VAULT_PATH, "notes")
+RAW_ATTACHMENTS_PATH = os.path.join(RAW_VAULT_PATH, "attachments")
+
+PREPROCESSED_NOTES_PATH = os.path.join(PREPROCESSED_VAULT_PATH, "notes")
+PREPROCESSED_ATTACHMENTS_PATH = os.path.join(PREPROCESSED_VAULT_PATH, "attachments")
+
+CURATED_NOTES_PATH = os.path.join(CURATED_VAULT_PATH, "notes")
+CURATED_ATTACHMENTS_PATH = os.path.join(CURATED_VAULT_PATH, "attachments")
+
+# Test-specific paths
+TEST_RAW_NOTES_PATH = os.path.join(TEST_RAW_PATH, "notes")
+TEST_RAW_ATTACHMENTS_PATH = os.path.join(TEST_RAW_PATH, "attachments")
+
+TEST_PREPROCESSED_NOTES_PATH = os.path.join(TEST_PREPROCESSED_PATH, "notes")
+TEST_PREPROCESSED_ATTACHMENTS_PATH = os.path.join(TEST_PREPROCESSED_PATH, "attachments")
+
+TEST_CURATED_NOTES_PATH = os.path.join(TEST_CURATED_PATH, "notes")
+TEST_CURATED_ATTACHMENTS_PATH = os.path.join(TEST_CURATED_PATH, "attachments")
+
+# Legacy aliases
+CURATION_NOTES_PATH = CURATED_NOTES_PATH
+CURATION_ASSETS_PATH = CURATED_ATTACHMENTS_PATH
+CURATION_ATTACHMENTS_PATH = RAW_ATTACHMENTS_PATH  # Curated notes reference original attachments
 
 # Analysis configuration
 ANALYSIS_CATEGORIES = [
@@ -134,10 +163,30 @@ def get_curation_config():
     """Generate curation configuration from main config."""
     return {
         'paths': {
-            'vault': VAULT_PATH,
-            'attachments': CURATION_ATTACHMENTS_PATH,
-            'out_notes': CURATION_NOTES_PATH,
-            'out_assets': CURATION_ASSETS_PATH
+            'raw_vault': RAW_VAULT_PATH,
+            'preprocessed_vault': PREPROCESSED_VAULT_PATH,
+            'curated_vault': CURATED_VAULT_PATH,
+            'raw_notes': RAW_NOTES_PATH,
+            'raw_attachments': RAW_ATTACHMENTS_PATH,
+            'preprocessed_notes': PREPROCESSED_NOTES_PATH,
+            'preprocessed_attachments': PREPROCESSED_ATTACHMENTS_PATH,
+            'curated_notes': CURATED_NOTES_PATH,
+            'curated_attachments': CURATED_ATTACHMENTS_PATH,
+            # Test paths
+            'test_raw_vault': TEST_RAW_PATH,
+            'test_preprocessed_vault': TEST_PREPROCESSED_PATH,
+            'test_curated_vault': TEST_CURATED_PATH,
+            'test_raw_notes': TEST_RAW_NOTES_PATH,
+            'test_raw_attachments': TEST_RAW_ATTACHMENTS_PATH,
+            'test_preprocessed_notes': TEST_PREPROCESSED_NOTES_PATH,
+            'test_preprocessed_attachments': TEST_PREPROCESSED_ATTACHMENTS_PATH,
+            'test_curated_notes': TEST_CURATED_NOTES_PATH,
+            'test_curated_attachments': TEST_CURATED_ATTACHMENTS_PATH,
+            # Legacy aliases for backward compatibility
+            'vault': RAW_VAULT_PATH,
+            'attachments': RAW_ATTACHMENTS_PATH,
+            'out_notes': CURATED_NOTES_PATH,
+            'out_assets': CURATED_ATTACHMENTS_PATH
         },
         'models': {
             'fast': 'llama3.1:8b',  # Better model for professional assessment
@@ -181,6 +230,27 @@ def get_curation_config():
             'default': 'auto'
         }
     }
+
+def get_test_config():
+    """Generate test configuration using test data paths."""
+    config = get_curation_config()
+    # Override paths to use test data - use preprocessed as input for curation
+    config['paths'].update({
+        'vault': TEST_PREPROCESSED_PATH,  # Use preprocessed as input
+        'attachments': TEST_PREPROCESSED_ATTACHMENTS_PATH,  # Use preprocessed attachments
+        'out_notes': TEST_CURATED_NOTES_PATH,
+        'out_assets': TEST_CURATED_ATTACHMENTS_PATH,
+        'raw_vault': TEST_RAW_PATH,
+        'raw_notes': TEST_RAW_NOTES_PATH,
+        'raw_attachments': TEST_RAW_ATTACHMENTS_PATH,
+        'preprocessed_vault': TEST_PREPROCESSED_PATH,
+        'preprocessed_notes': TEST_PREPROCESSED_NOTES_PATH,
+        'preprocessed_attachments': TEST_PREPROCESSED_ATTACHMENTS_PATH,
+        'curated_vault': TEST_CURATED_PATH,
+        'curated_notes': TEST_CURATED_NOTES_PATH,
+        'curated_attachments': TEST_CURATED_ATTACHMENTS_PATH
+    })
+    return config
 
 def update_curation_yaml():
     """Update config.yaml with current configuration."""

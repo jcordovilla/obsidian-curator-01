@@ -2,7 +2,46 @@ import os
 import fitz
 from PIL import Image
 import pytesseract
+import base64
+import requests
 from .utils import clean_markdown_to_text
+
+def extract_image_meaning(abs_path):
+    """Extract meaning from image using OCR + LLM analysis."""
+    try:
+        # First, get OCR text from the image
+        img = Image.open(abs_path)
+        width, height = img.size
+        
+        # Check if image is too small to be meaningful
+        if width < 100 or height < 100:
+            return f"Small image ({width}x{height}px) - likely an icon or thumbnail"
+        
+        ocr_text = pytesseract.image_to_string(img)
+        
+        # If OCR found text, use LLM to analyze it
+        if ocr_text.strip():
+            # Use LLM to analyze the OCR text and extract meaning
+            from .llm import chat_text
+            prompt = f"""Analyze this text extracted from an image and describe what the image contains, focusing on any diagrams, charts, or visual information that would be relevant for infrastructure investment, PPPs, or project finance.
+
+OCR Text: {ocr_text}
+
+Describe what you think the image shows based on this text:"""
+            
+            # Use a simple text model since vision models aren't available
+            analysis = chat_text('gemma3:4b', 
+                               "You are an expert at analyzing technical content from images.", 
+                               prompt, 
+                               tokens=300, 
+                               temp=0.2)
+            return analysis
+        else:
+            return f"Image ({width}x{height}px) - no readable text found via OCR"
+        
+    except Exception as e:
+        print(f"Warning: Image analysis failed for {abs_path}: {e}")
+        return ""
 
 def extract_pdf(abs_path):
     try:
@@ -26,8 +65,26 @@ def extract_pdf(abs_path):
 def extract_image(abs_path):
     try:
         img = Image.open(abs_path)
-        text = pytesseract.image_to_string(img)
-        return {'kind':'image', 'text': text, 'meta': {'width': img.width, 'height': img.height}}
+        
+        # Extract text using OCR
+        ocr_text = pytesseract.image_to_string(img)
+        
+        # Extract meaning using vision model
+        vision_text = extract_image_meaning(abs_path)
+        
+        # Combine OCR and vision analysis
+        combined_text = f"OCR Text:\n{ocr_text}\n\nVision Analysis:\n{vision_text}"
+        
+        return {
+            'kind': 'image',
+            'text': combined_text, 
+            'meta': {
+                'width': img.width, 
+                'height': img.height,
+                'ocr_text': ocr_text,
+                'vision_analysis': vision_text
+            }
+        }
     except FileNotFoundError:
         print(f"Warning: Image file not found: {abs_path}")
         return {'kind':'image', 'text': '', 'meta': {}}
@@ -49,7 +106,11 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None):
             abs_path = os.path.join(attachments_root, relative_path)
         else:
             abs_path = primary['path']
-        return extract_pdf(abs_path)
+        result = extract_pdf(abs_path)
+        # If PDF extraction failed or returned empty content, fall back to markdown
+        if not result.get('text', '').strip():
+            return extract_text(body)
+        return result
     if primary['kind']=='image' and primary['path']:
         # Resolve relative path to absolute path
         if attachments_root and not primary['path'].startswith('/'):
@@ -60,5 +121,9 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None):
             abs_path = os.path.join(attachments_root, relative_path)
         else:
             abs_path = primary['path']
-        return extract_image(abs_path)
+        result = extract_image(abs_path)
+        # If image extraction failed or returned empty content, fall back to markdown
+        if not result.get('text', '').strip():
+            return extract_text(body)
+        return result
     return extract_text(body)

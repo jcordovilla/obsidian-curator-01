@@ -49,10 +49,11 @@ Obsidian Curator is a powerful tool designed to clean and standardize Obsidian v
 
 ### Basic Usage
 
-1. **Configure your vault path** in `config.py`:
+1. **Configure your vault paths** in `config.py`:
    ```python
-   VAULT_PATH = "/path/to/your/obsidian/vault"
-   PREPROCESSING_OUTPUT_PATH = "/path/to/output/vault"
+   RAW_VAULT_PATH = "/path/to/your/raw/obsidian/vault"
+   PREPROCESSED_VAULT_PATH = "/path/to/preprocessed/vault"
+   CURATED_VAULT_PATH = "/path/to/curated/vault"
    ```
 
 2. **Update configuration files** (if needed):
@@ -60,12 +61,17 @@ Obsidian Curator is a powerful tool designed to clean and standardize Obsidian v
    python scripts/update_config.py
    ```
 
-3. **Run preprocessing**
+3. **Run preprocessing** (raw → preprocessed):
    ```bash
    python scripts/preprocess.py
    ```
 
-4. **View results** in your output directory
+4. **Run curation** (preprocessed → curated):
+   ```bash
+   python -m src.curation.obsidian_curator.main
+   ```
+
+5. **View results** in your curated directory
 
 ## 📁 Project Structure
 
@@ -99,8 +105,14 @@ obsidian-curator-01/
 │   ├── main.py                   # Analysis and characterization
 │   ├── preprocess.py             # Main preprocessing script
 │   └── update_config.py          # Configuration synchronization
-├── tests/                        # Test files
-│   └── test_performance.py       # Performance comparison tests
+├── tests/                        # Test files and test data
+│   ├── test_data/                # Test data with clear folder structure
+│   │   ├── raw/                  # Raw test notes + attachments
+│   │   ├── preprocessed/         # Preprocessed test notes + attachments
+│   │   └── curated/              # Curated test notes + attachments
+│   ├── test_complete_pipeline.py # End-to-end pipeline test
+│   ├── test_folder_structure.py  # Folder structure validation
+│   └── test_preprocessing_pipeline.py  # Preprocessing pipeline test
 ├── docs/                         # Documentation
 │   ├── USAGE.md                  # Complete usage guide
 │   ├── TECHNICAL_SPECIFICATION.md # Technical documentation for coding LLMs
@@ -110,6 +122,29 @@ obsidian-curator-01/
 ├── requirements.txt              # Python dependencies
 └── README.md                     # This file
 ```
+
+## 📁 Folder Structure
+
+The system uses a clear three-stage folder structure:
+
+```
+/Users/jose/Documents/Obsidian/
+├── Evermd/                          # RAW VAULT
+│   ├── notes/                       # Original notes
+│   └── attachments/                 # Original attachments
+├── Ever-preprocessed/               # PREPROCESSED VAULT
+│   ├── notes/                       # Cleaned notes
+│   └── attachments/                 # Cleaned attachments
+└── Ever-curated/                   # CURATED VAULT
+    ├── notes/                       # Enhanced notes with AI analysis
+    └── attachments/                 # Curated attachments
+```
+
+**Workflow**: `Raw → Preprocessed → Curated`
+
+- **Raw**: Original Evernote-converted notes
+- **Preprocessed**: Cleaned and standardized notes
+- **Curated**: AI-enhanced notes with professional analysis
 
 ## 🔧 Configuration
 
@@ -125,11 +160,13 @@ The project uses a **unified configuration system** where `config.py` is the sin
 
 Edit `config.py` to customize:
 
-- **Vault paths**: Input and output directories (absolute paths)
+- **Vault paths**: Raw, preprocessed, and curated directories (absolute paths)
+- **Test paths**: Test data directories for development and testing
 - **Sample sizes**: For analysis and testing
 - **Processing parameters**: Batch sizes, worker threads
 - **Boilerplate patterns**: Custom patterns for content cleaning
 - **Metadata fields**: Standardization rules
+- **LLM models**: AI models for content analysis and curation
 
 ### Configuration Management
 
@@ -144,8 +181,15 @@ python scripts/update_config.py
 ### Path Configuration
 
 ```python
-# Main vault path (single source of truth)
-VAULT_PATH = "/path/to/your/obsidian/vault"
+# Clear folder structure (single source of truth)
+RAW_VAULT_PATH = "/path/to/your/raw/obsidian/vault"
+PREPROCESSED_VAULT_PATH = "/path/to/preprocessed/vault" 
+CURATED_VAULT_PATH = "/path/to/curated/vault"
+
+# Test data paths
+TEST_RAW_PATH = "tests/test_data/raw"
+TEST_PREPROCESSED_PATH = "tests/test_data/preprocessed"
+TEST_CURATED_PATH = "tests/test_data/curated"
 
 # Derived paths (automatically calculated)
 PREPROCESSING_OUTPUT_PATH = "/path/to/processed/vault"
@@ -218,11 +262,17 @@ python -m src.curation.obsidian_curator.main
 python -m src.curation.obsidian_curator.main --vault /path/to/vault --out /path/to/output
 ```
 
-### Performance Testing
+### Testing
 
 ```bash
-# Run performance comparison test
-python tests/test_performance.py --sample-size 50
+# Run complete pipeline test (raw → preprocessed → curated)
+python tests/test_complete_pipeline.py
+
+# Test folder structure and configuration
+python tests/test_folder_structure.py
+
+# Test preprocessing pipeline only
+python tests/test_preprocessing_pipeline.py
 ```
 
 ### Configuration Management

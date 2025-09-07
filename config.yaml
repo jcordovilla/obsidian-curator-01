@@ -1,16 +1,34 @@
 decision:
-  gray_margin: 0.05
-  keep_threshold: 0.68
+  gray_margin: 0.1
+  keep_threshold: 0.5
 language:
   default: auto
 models:
   embed: nomic-embed-text
-  fast: phi3:mini
+  fast: llama3.1:8b
   main: llama3.1:8b
 paths:
   attachments: /Users/jose/Documents/Obsidian/Evermd/attachments
-  out_assets: /Users/jose/Documents/Obsidian/Ever-curated/assets
+  curated_attachments: /Users/jose/Documents/Obsidian/Ever-curated/attachments
+  curated_notes: /Users/jose/Documents/Obsidian/Ever-curated/notes
+  curated_vault: /Users/jose/Documents/Obsidian/Ever-curated
+  out_assets: /Users/jose/Documents/Obsidian/Ever-curated/attachments
   out_notes: /Users/jose/Documents/Obsidian/Ever-curated/notes
+  preprocessed_attachments: /Users/jose/Documents/Obsidian/Ever-preprocessed/attachments
+  preprocessed_notes: /Users/jose/Documents/Obsidian/Ever-preprocessed/notes
+  preprocessed_vault: /Users/jose/Documents/Obsidian/Ever-preprocessed
+  raw_attachments: /Users/jose/Documents/Obsidian/Evermd/attachments
+  raw_notes: /Users/jose/Documents/Obsidian/Evermd/notes
+  raw_vault: /Users/jose/Documents/Obsidian/Evermd
+  test_curated_attachments: tests/test_data/curated/attachments
+  test_curated_notes: tests/test_data/curated/notes
+  test_curated_vault: tests/test_data/curated
+  test_preprocessed_attachments: tests/test_data/preprocessed/attachments
+  test_preprocessed_notes: tests/test_data/preprocessed/notes
+  test_preprocessed_vault: tests/test_data/preprocessed
+  test_raw_attachments: tests/test_data/raw/attachments
+  test_raw_notes: tests/test_data/raw/notes
+  test_raw_vault: tests/test_data/raw
   vault: /Users/jose/Documents/Obsidian/Evermd
 priorities:
 - pdf
@@ -25,16 +43,34 @@ summaries:
     max_tokens: 900
 taxonomy:
   categories:
-  - PPP
+  - Infrastructure Investment
+  - PPP/P3
   - Concessions
-  - Roads
-  - Water
+  - Project Finance
+  - Risk Management
+  - Roads & Transport
+  - Water & Wastewater
   - Energy
-  - ESG
-  - Governance
-  - Policy
-  - Finance
-  - LATAM
+  - Hospitals & Social Infrastructure
+  - Railways
+  - Digital Transformation
+  - AI & Machine Learning
+  - Digital Twins
+  - Geospatial Data
+  - Process Automation
+  - Governance & Transparency
+  - Policy & Regulation
+  - Strategic Planning
+  - Asset Management
+  - Technical Due Diligence
+  - Feasibility Studies
+  - Market Intelligence
+  - Critical Infrastructure Protection
   - Spain
-  - Indonesia
-  - Africa
+  - Europe
+  - LATAM
+  - International Development
+  - ESG & Sustainability
+  - Climate Resilience
+  - Innovation & R&D
+  - Capacity Building

@@ -49,7 +49,7 @@ Return JSON with exactly:
 
 Return strict JSON only."""
     
-    data = chat_json(cfg['models']['fast'], system=CLASSIFY_SYS, user=user, tokens=600)
+    data = chat_json(cfg['models']['fast'], system=CLASSIFY_SYS, user=user, tokens=600, temp=0.25)
     cats = data.get('categories',[])
     tags = data.get('tags',[])
     ents = data.get('entities',{})

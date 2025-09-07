@@ -36,7 +36,7 @@ Produce exactly the following sections:
 
 Tone: conservative, evidence-first. Do not invent data. If evidence is absent for a claim, flag it as "unsupported"."""
 
-        return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900)
+        return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900, temp=0.2)
         
     if kind=='image':
         prompt = f"""Summarize this image and any OCR'd text for an infrastructure expert. Be precise and avoid speculation.
@@ -53,7 +53,7 @@ Provide:
 
 Do not invent contextual history or attribution. If OCR is empty, clearly state that and describe only visual features."""
         
-        return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=500)
+        return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=500, temp=0.2)
         
     # Text content
     prompt = f"""Summarize this text note for a senior infrastructure practitioner. Be conservative: emphasise methods, data, technical detail and implications.
@@ -69,4 +69,4 @@ Output exactly:
 
 Constraints: If the content lacks technical substance (e.g., <100 words, only links or placeholders), state that explicitly and keep relevance low. Avoid speculation and do not invent facts."""
     
-    return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=400)
+    return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=400, temp=0.2)

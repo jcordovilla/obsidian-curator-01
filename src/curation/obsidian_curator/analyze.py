@@ -1,97 +1,75 @@
 import math, re
 from .llm import embed_text, chat_json
 
+def calculate_content_richness(text, title, meta):
+    """Calculate content richness considering content type and quality."""
+    # Basic length-based richness
+    length_richness = min(1.0, math.log1p(len(text))/8.0)
+    
+    # Check for business card patterns
+    business_card_indicators = [
+        'tarjeta de visita', 'business card', 'contact', 'email', 'phone', 'teléfono',
+        'director', 'comercial', 'manager', 'ceo', 'cto', 'cfo'
+    ]
+    
+    title_lower = title.lower()
+    text_lower = text.lower()
+    
+    # If it looks like a business card, cap the richness
+    if any(indicator in title_lower or indicator in text_lower for indicator in business_card_indicators):
+        # Business cards should have low richness regardless of length
+        return min(0.3, length_richness)
+    
+    # Check for other low-value content types
+    if 'email' in text_lower and 'phone' in text_lower and len(text) < 500:
+        # Looks like contact information
+        return min(0.4, length_richness)
+    
+    # Check for structured content (sections, lists, etc.)
+    structure_score = 0
+    if text.count('\n## ') > 0:  # Has sections
+        structure_score += 0.2
+    if text.count('\n- ') > 3 or text.count('\n* ') > 3:  # Has lists
+        structure_score += 0.2
+    if text.count('\n\n') > 2:  # Has paragraphs
+        structure_score += 0.1
+    
+    # Combine length and structure
+    final_richness = min(1.0, length_richness + structure_score)
+    return final_richness
+
 def get_llm_relevance_score(text, title, cfg):
     """Use LLM to assess professional relevance for infrastructure expert."""
     
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
-    prompt = f"""You are a professional evaluator for a senior consultant specializing in infrastructure investment, digital transformation, and PPPs. 
-
-    CRITICAL: Content related to INFRASTRUCTURE PROJECTS, PPPs, CONCESSIONS, PROJECT FINANCE, DIGITAL TRANSFORMATION, or ACADEMIC CONFERENCES on these topics should score above 0.5.
+    prompt = f"""You are evaluating content for a senior infrastructure investment professional who works across multiple domains including financing, technology, governance, and risk management.
 
     TITLE: {title}
     CONTENT: {text_sample}
 
-    Scoring rubric
-    - Relevance (0.00–1.00)
-    - 0.80–1.00: Directly addresses RELEVANT CONTENT with specific technical/financial/governance detail (metrics, models, legislation, contracts, case studies).
-    - 0.50–0.79: Related to RELEVANT CONTENT with some professional substance or context.
-    - 0.20–0.49: Tangentially related but lacks professional depth or specifics.
-    - 0.00–0.19: Matches IRRELEVANT CONTENT or has no professional depth.
-    - Caps: if CONTENT < 100 words, mostly navigation/boilerplate, or only filenames/links without context → relevance ≤ 0.30.
-    - Credibility (0.00–1.00)
-    - 0.80–1.00: Multilaterals/government/pro bodies, peer-review, official stats, primary docs, reputable outlets with citations.
-    - 0.50–0.79: Trade press/technical blogs with sources; identifiable authors.
-    - 0.00–0.49: Anonymous/marketing/social posts/unverified claims.
-    - Cap credibility ≤ 0.50 if no author/date/source.
-    - Novelty (0.00–1.00)
-    - 0.80–1.00: Distinctive analysis/data/methods, new policy/market shifts, lessons learned.
-    - 0.50–0.79: Familiar material with some non-trivial insight.
-    - 0.00–0.49: Generic definitions or repetitive content.
+    Rate this content on:
+    - relevance: How relevant is this to the professional knowledge needs of a senior infrastructure investment specialist? (0-1)
+    - credibility: How credible is the source? (0-1) 
+    - novelty: How novel/insightful is the content? (0-1)
 
-    RELEVANT CONTENT (score 0.7-1.0):
-    - Finance & Economics
-    - Technical and financial analysis of infrastructure projects, PPPs, and concessions
-    - M&A activity, investment flows, and market intelligence in infrastructure sectors
-    - Financing instruments, blended finance, and project finance structures
-    - Infrastructure economics, value for money assessments, and fiscal impacts
-    - Policy & Governance
-    - Policy documents, regulatory frameworks, and legislative frameworks
-    - International development policies, multilateral guidelines, and donor frameworks
-    - Procurement strategies, contracting models, PPP governance, and institutional practices
-    - Historical precedents, comparative case law, and accumulated professional know-how
-    - Risk & Sustainability
-    - Risk management, uncertainty modeling, and scenario planning in infrastructure delivery
-    - Sustainability, resilience, climate adaptation, and environmental impact assessments
-    - Technology & Innovation
-    - Innovation, digital transformation, and smart infrastructure systems
-    - Embedded technologies: IoT, intelligent buildings, monitoring and control systems
-    - Data-driven insights: Big Data, AI, predictive analytics, and scenario modeling
-    - Knowledge & Professional Practice
-    - Industry reports from professional bodies and government agencies
-    - Infrastructure project case studies and evaluations with technical and operational depth
-    - Professional insights, expert commentary, and applied technical analysis
-    - News and media sources with financial, technical, or strategic relevance
-    - Knowledge management practices, methodologies, and professional standards
-    - Online platforms, data repositories, and embedded knowledge systems for infrastructure
-    - Historical precedents, comparative case law, and accumulated professional know-how
-    - Academic conferences, symposiums, and research proceedings on infrastructure topics
-    - Professional development materials and training resources for infrastructure practitioners
-    - Research papers, case studies, and technical reports from infrastructure organizations
+    RELEVANCE GUIDELINES:
+    - HIGHLY RELEVANT (0.8-1.0): Direct infrastructure projects, PPPs, project finance, digital transformation, emerging technologies, financial instruments, technical analysis, case studies, professional reports
+    - MODERATELY RELEVANT (0.5-0.7): Alternative financing methods, business development, professional practices, sector analysis, technology applications, academic content, financial services
+    - LOW RELEVANCE (0.2-0.4): General business content, social media marketing, personal productivity
+    - IRRELEVANT (0.0-0.1): Personal documents, bills, casual notes, unrelated content
 
-    IRRELEVANT CONTENT (score 0.0–0.3):
-    - Bills/receipts, invoices, service calls, warranties
-    - Utility readings, household/consumption logs, appliance records
-    - Contact cards, bare phone/email lists, business cards without context
-    - Casual notes, personal diaries, social posts, random thoughts
-    - Shopping/marketplace (Wallapop, Vibbo), consumer services, promo emails
-    - Travel/appointments/calendars, confirmations, booking codes
-    - Generic news headlines without technical/financial specifics
-    - Navigation/cookie banners, menu/sidebar scrapings, clipper boilerplate
-    - Short fragments (<50 words) or placeholders without substantive content
-    - Code/config/logs unrelated to infrastructure/PPP practice
-    - Personal identification documents (passports, IDs, insurance numbers)
-    - Government forms unrelated to infrastructure projects
-    - Personal correspondence or administrative documents
-    - Any content NOT directly about infrastructure, PPPs, or digital transformation
+    PROFESSIONAL CONTEXT: This professional needs knowledge across financing methods, emerging technologies, governance practices, and risk management to inform infrastructure investment decisions. Content that provides professional knowledge applicable to infrastructure work should be rated highly, even if not directly about infrastructure projects.
 
-    Output requirements
-    - Return a single JSON object (no prose, no markdown, no code fences) with exactly these keys in this order:
-    - "relevance": number in [0,1], rounded to two decimals
-    - "credibility": number in [0,1], rounded to two decimals
-    - "novelty": number in [0,1], rounded to two decimals
-    - "reasoning": string ≤ 30 words explaining the scores
-    - If relevance ≥ 0.70, explicitly name the satisfied RELEVANT category by number and name in "reasoning".
-    - If CONTENT is empty or only links/filenames with no context, set relevance ≤ 0.25 and explain briefly."""
+    Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "novelty": 0.xx, "reasoning": "brief explanation"}}"""
 
     try:
         result = chat_json(cfg['models']['fast'], 
                           system="You are an expert evaluator for professional knowledge curation. Return strict JSON only.",
                           user=prompt, 
                           tokens=400, 
-                          temp=0.2)  # Slightly higher temperature for better reasoning
+                          temp=0.3)  # Higher temperature for more creative relevance reasoning
         
         return {
             'relevance': min(1.0, max(0.0, result.get('relevance', 0.5))),
@@ -127,7 +105,7 @@ def analyze_features(content, meta, cfg, relevance_score=None):
         'relevance': llm_scores['relevance'],
         'credibility': llm_scores['credibility'],
         'novelty': llm_scores['novelty'],
-        'richness': min(1.0, math.log1p(len(text))/8.0),  # Keep mathematical richness
+        'richness': calculate_content_richness(text, title, meta),  # More sophisticated richness calculation
         'llm_reasoning': llm_scores['reasoning']
     }
     return features

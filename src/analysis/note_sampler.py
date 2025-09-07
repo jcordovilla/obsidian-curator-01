@@ -11,13 +11,13 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from config import VAULT_PATH, SAMPLE_SIZE, OUTPUT_DIR
+from config import RAW_VAULT_PATH, SAMPLE_SIZE, OUTPUT_DIR
 
 
 class NoteSampler:
     """Handles sampling of notes from the Obsidian vault."""
     
-    def __init__(self, vault_path: str = VAULT_PATH):
+    def __init__(self, vault_path: str = RAW_VAULT_PATH):
         self.vault_path = Path(vault_path)
         self.all_notes = []
         self._discover_notes()
