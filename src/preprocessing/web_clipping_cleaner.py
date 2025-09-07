@@ -27,6 +27,14 @@ except ImportError:
     READABILITY_AVAILABLE = False
     print("Warning: readability-lxml not available. Install with: pip install readability-lxml")
 
+# Try to import markdown for proper conversion
+try:
+    import markdown
+    MARKDOWN_AVAILABLE = True
+except ImportError:
+    MARKDOWN_AVAILABLE = False
+    print("Warning: markdown not available. Install with: pip install markdown")
+
 
 class WebClippingCleaner:
     """Cleans web clipping content by removing boilerplate and preserving valuable content."""
@@ -556,6 +564,138 @@ def extract_content_with_readability(content: str) -> Optional[str]:
         return None
 
 
+def markdown_to_html(markdown_content: str) -> str:
+    """Convert Markdown content to HTML for Trafilatura processing."""
+    if not MARKDOWN_AVAILABLE:
+        # Fallback: simple conversion
+        html = markdown_content
+        # Convert basic Markdown to HTML
+        html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+        html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+        html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+        html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+        html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
+        html = re.sub(r'^\- (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+        html = re.sub(r'^(\d+)\. (.+)$', r'<li>\2</li>', html, flags=re.MULTILINE)
+        return f'<div>{html}</div>'
+    
+    # Use markdown library for proper conversion
+    md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
+    html = md.convert(markdown_content)
+    
+    # Wrap in a proper HTML structure
+    return f'<html><body>{html}</body></html>'
+
+
+def html_to_markdown(html_content: str) -> str:
+    """Convert HTML content back to Markdown."""
+    # Remove HTML tags but preserve structure
+    text = re.sub(r'<h1[^>]*>(.*?)</h1>', r'# \1', html_content, flags=re.DOTALL)
+    text = re.sub(r'<h2[^>]*>(.*?)</h2>', r'## \1', text, flags=re.DOTALL)
+    text = re.sub(r'<h3[^>]*>(.*?)</h3>', r'### \1', text, flags=re.DOTALL)
+    text = re.sub(r'<h4[^>]*>(.*?)</h4>', r'#### \1', text, flags=re.DOTALL)
+    text = re.sub(r'<h5[^>]*>(.*?)</h5>', r'##### \1', text, flags=re.DOTALL)
+    text = re.sub(r'<h6[^>]*>(.*?)</h6>', r'###### \1', text, flags=re.DOTALL)
+    
+    # Convert links
+    text = re.sub(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', r'[\2](\1)', text, flags=re.DOTALL)
+    
+    # Convert lists
+    text = re.sub(r'<ul[^>]*>', '', text)
+    text = re.sub(r'</ul>', '', text)
+    text = re.sub(r'<ol[^>]*>', '', text)
+    text = re.sub(r'</ol>', '', text)
+    text = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1', text, flags=re.DOTALL)
+    
+    # Convert emphasis
+    text = re.sub(r'<strong[^>]*>(.*?)</strong>', r'**\1**', text, flags=re.DOTALL)
+    text = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', text, flags=re.DOTALL)
+    text = re.sub(r'<em[^>]*>(.*?)</em>', r'*\1*', text, flags=re.DOTALL)
+    text = re.sub(r'<i[^>]*>(.*?)</i>', r'*\1*', text, flags=re.DOTALL)
+    
+    # Convert paragraphs
+    text = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', text, flags=re.DOTALL)
+    
+    # Convert line breaks
+    text = re.sub(r'<br[^>]*>', '\n', text)
+    
+    # Remove remaining HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up whitespace
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+    text = re.sub(r'[ \t]+', ' ', text)
+    
+    return text.strip()
+
+
+def extract_content_with_trafilatura_v2(markdown_content: str) -> Optional[str]:
+    """Extract main content using Trafilatura with proper Markdown→HTML→Markdown conversion."""
+    if not TRAFILATURA_AVAILABLE:
+        return None
+    
+    try:
+        # Step 1: Convert Markdown to HTML
+        html_content = markdown_to_html(markdown_content)
+        
+        # Step 2: Use Trafilatura on HTML
+        extracted_html = trafilatura.extract(
+            html_content,
+            include_comments=False,
+            include_tables=True,
+            include_images=False,
+            include_links=True,
+            include_formatting=True,
+            favor_precision=True,  # Favor precision over recall
+            favor_recall=False
+        )
+        
+        if not extracted_html or len(extracted_html.strip()) < 100:
+            return None
+        
+        # Step 3: Convert extracted HTML back to Markdown
+        extracted_markdown = html_to_markdown(extracted_html)
+        
+        if len(extracted_markdown.strip()) > 100:
+            return extracted_markdown.strip()
+        
+        return None
+        
+    except Exception as e:
+        print(f"Trafilatura v2 extraction failed: {e}")
+        return None
+
+
+def extract_content_with_readability_v2(markdown_content: str) -> Optional[str]:
+    """Extract main content using Readability with proper Markdown→HTML→Markdown conversion."""
+    if not READABILITY_AVAILABLE:
+        return None
+    
+    try:
+        # Step 1: Convert Markdown to HTML
+        html_content = markdown_to_html(markdown_content)
+        
+        # Step 2: Use Readability on HTML
+        doc = Document(html_content)
+        extracted_html = doc.summary()
+        
+        if not extracted_html or len(extracted_html.strip()) < 100:
+            return None
+        
+        # Step 3: Convert extracted HTML back to Markdown
+        extracted_markdown = html_to_markdown(extracted_html)
+        
+        if len(extracted_markdown.strip()) > 100:
+            return extracted_markdown.strip()
+        
+        return None
+        
+    except Exception as e:
+        print(f"Readability v2 extraction failed: {e}")
+        return None
+
+
 def apply_enhanced_cleaning(content: str) -> str:
     """Apply enhanced cleaning patterns based on investigation findings."""
     lines = content.split('\n')
@@ -746,7 +886,7 @@ def apply_enhanced_cleaning(content: str) -> str:
 
 
 def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
-    """Enhanced web clipping cleaner using Trafilatura and advanced cleaning patterns."""
+    """Enhanced web clipping cleaner using proper Trafilatura integration."""
     import re
     
     # Check if this is a web clipping
@@ -758,15 +898,20 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
         web_indicators = ['http://', 'https://', 'www.', 'html', 'div', 'class=', 'id=']
         is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
     
-    # For web clippings, skip extraction libraries and go directly to enhanced cleaning
-    # since Trafilatura and Readability are designed for HTML, not Markdown
-    if is_web_clipping:
-        # Apply enhanced cleaning directly to the content
-        cleaned_content = apply_enhanced_cleaning(content)
-        if len(cleaned_content.strip()) > 100:
-            return cleaned_content
+    if not is_web_clipping:
+        return content
     
-    # Check if this is heavily HTML-structured content
+    # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
+    extracted = extract_content_with_trafilatura_v2(content)
+    if extracted:
+        return extracted
+    
+    # Fallback to Readability
+    extracted = extract_content_with_readability_v2(content)
+    if extracted:
+        return extracted
+    
+    # If both fail, fall back to enhanced cleaning patterns
     if is_heavily_html_structured(content):
         return clean_heavily_html_structured(content, frontmatter)
     
