@@ -1,14 +1,31 @@
 """
 Web clipping content cleaner for removing boilerplate and extracting main content.
+Uses Trafilatura for advanced content extraction and enhanced cleaning patterns.
 """
 
 import re
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from config import BOILERPLATE_PATTERNS, WEB_BOILERPLATE_INDICATORS
+
+# Try to import Trafilatura for advanced content extraction
+try:
+    import trafilatura
+    TRAFILATURA_AVAILABLE = True
+except ImportError:
+    TRAFILATURA_AVAILABLE = False
+    print("Warning: Trafilatura not available. Install with: pip install trafilatura")
+
+# Try to import readability for fallback extraction
+try:
+    from readability import Document
+    READABILITY_AVAILABLE = True
+except ImportError:
+    READABILITY_AVAILABLE = False
+    print("Warning: readability-lxml not available. Install with: pip install readability-lxml")
 
 
 class WebClippingCleaner:
@@ -401,8 +418,8 @@ def is_heavily_html_structured(content: str) -> bool:
     html_tags = len(re.findall(r'<[^>]+>', content))
     total_chars = len(content)
     
-    # If more than 30% of content is HTML tags, it's heavily structured
-    if html_tags > 0 and (html_tags * 10) / total_chars > 0.3:
+    # If more than 20% of content is HTML tags, it's heavily structured
+    if html_tags > 0 and (html_tags * 10) / total_chars > 0.2:
         return True
     
     # Check for specific patterns that indicate heavy HTML structure
@@ -410,6 +427,10 @@ def is_heavily_html_structured(content: str) -> bool:
         r'<table[^>]*>.*?</table>',
         r'<div[^>]*style="[^"]*margin:[^"]*padding:[^"]*"[^>]*>',
         r'<td[^>]*style="[^"]*margin:[^"]*padding:[^"]*"[^>]*>',
+        r'<div[^>]*class="[^"]*table[^"]*"[^>]*>',  # Joplin table wrappers
+        r'<tbody[^>]*>.*?</tbody>',  # Table body elements
+        r'<tr[^>]*>.*?</tr>',  # Table rows
+        r'<td[^>]*>.*?</td>',  # Table cells
     ]
     
     pattern_matches = 0
@@ -418,7 +439,20 @@ def is_heavily_html_structured(content: str) -> bool:
         pattern_matches += len(matches)
     
     # If we find many table/div structures, it's heavily HTML
-    return pattern_matches > 10
+    return pattern_matches > 5
+    
+    # Additional check: if content has very long lines with lots of HTML attributes
+    lines = content.split('\n')
+    long_html_lines = 0
+    for line in lines:
+        if len(line) > 500 and '<' in line and '>' in line:
+            # Count HTML attributes in the line
+            attr_count = len(re.findall(r'\w+="[^"]*"', line))
+            if attr_count > 10:  # Many attributes indicate complex HTML structure
+                long_html_lines += 1
+    
+    # If we have many long HTML lines, it's heavily structured
+    return long_html_lines > 3
 
 def clean_heavily_html_structured(content: str, frontmatter: Dict = None) -> str:
     """Clean heavily HTML-structured content by extracting only meaningful text."""
@@ -466,331 +500,280 @@ def clean_heavily_html_structured(content: str, frontmatter: Dict = None) -> str
         # If no meaningful content found, return a minimal note
         return frontmatter_text + '\n\n# Content could not be extracted\n\nThis web clipping contained mostly HTML structure with little readable content.'
 
+def extract_content_with_trafilatura(content: str) -> Optional[str]:
+    """Extract main content using Trafilatura (best practices approach)."""
+    if not TRAFILATURA_AVAILABLE:
+        return None
+    
+    try:
+        # Convert markdown to HTML-like format for Trafilatura
+        html_content = content
+        
+        # Extract main content
+        extracted = trafilatura.extract(
+            html_content,
+            include_comments=False,
+            include_tables=True,
+            include_images=False,
+            include_links=False,
+            include_formatting=True,
+            favor_precision=True,  # Favor precision over recall
+            favor_recall=False
+        )
+        
+        if extracted and len(extracted.strip()) > 100:
+            return extracted.strip()
+        
+        return None
+    except Exception as e:
+        print(f"Trafilatura extraction failed: {e}")
+        return None
+
+
+def extract_content_with_readability(content: str) -> Optional[str]:
+    """Extract main content using Readability (fallback approach)."""
+    if not READABILITY_AVAILABLE:
+        return None
+    
+    try:
+        # Convert markdown to HTML-like format for Readability
+        # This is a simple conversion - Readability works better with HTML
+        html_content = content
+        
+        # Extract main content
+        doc = Document(html_content)
+        extracted = doc.summary()
+        
+        if extracted and len(extracted.strip()) > 100:
+            # Clean up HTML tags
+            extracted = re.sub(r'<[^>]+>', '', extracted)
+            extracted = re.sub(r'\s+', ' ', extracted).strip()
+            return extracted
+        
+        return None
+    except Exception as e:
+        print(f"Readability extraction failed: {e}")
+        return None
+
+
+def apply_enhanced_cleaning(content: str) -> str:
+    """Apply enhanced cleaning patterns based on investigation findings."""
+    lines = content.split('\n')
+    cleaned_lines = []
+    
+    # Enhanced patterns for better boilerplate removal
+    enhanced_patterns = [
+        # Navigation and menus - more comprehensive patterns
+        r'^\s*#\s*[Ss]ections\s*$',
+        r'^\s*#\s*[Bb]logs\s*$',
+        r'^\s*#\s*[Aa]pps.*[Dd]igital.*[Ee]ditions\s*$',
+        r'^\s*#\s*[Oo]ther.*[Pp]ublications\s*$',
+        r'^\s*#\s*[Ff]rom.*[Tt]he.*[Ee]conomist.*[Gg]roup\s*$',
+        r'^\s*#\s*[Mm]edia\s*$',
+        r'^\s*#\s*[Tt]oday.*[Vv]ideo\s*$',
+        r'^\s*#\s*[Cc]lassified.*[Aa]ds\s*$',
+        r'^\s*#\s*[Kk]eep.*[Uu]pdated\s*$',
+        
+        # Navigation menu items
+        r'^\s*\*\s*\[.*[Ll]atest.*[Uu]pdates.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ll]eaders.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]riefing.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Uu]nited.*[Ss]tates.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Aa]mericas.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Aa]sia.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Cc]hina.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Mm]iddle.*[Ee]ast.*[Aa]nd.*[Aa]frica.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]urope.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]ritain.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ii]nternational.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]usiness.*[Ff]inance.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ff]inance.*[Aa]nd.*[Ee]conomics.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ss]cience.*[Aa]nd.*[Tt]echnology.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]ooks.*[Aa]nd.*[Aa]rts.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Oo]bituary.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ss]pecial.*[Rr]eports.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]echnology.*[Qq]uarterly.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Dd]ebates.*\]\([^)]+\)\s*$',
+        
+        # Blog navigation
+        r'^\s*\*\s*\[.*[Bb]agehot.*[Nn]otebook.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]artleby.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Bb]uttonwood.*[Nn]otebook.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Dd]emocracy.*[Ii]n.*[Aa]merica.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]rasmus.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ff]ree.*[Ee]xchange.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]ame.*[Tt]heory.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]raphic.*[Dd]etail.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]ulliver.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Kk]affeeklatsch.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Pp]rospero.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ee]conomist.*[Ee]xplains.*\]\([^)]+\)\s*$',
+        
+        # Apps and digital editions
+        r'^\s*\*\s*\[.*[Tt]he.*[Ee]conomist.*[Aa]pps.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]spresso.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]lobal.*[Bb]usiness.*[Rr]eview.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ww]orld.*[Ii]n.*[Ff]igures.*\]\([^)]+\)\s*$',
+        
+        # Other publications
+        r'^\s*\*\s*\[.*1843.*[Mm]agazine.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ww]orld.*[Ii]n.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ww]orld.*[Ii]f.*\]\([^)]+\)\s*$',
+        
+        # From The Economist Group
+        r'^\s*\*\s*\[.*[Ee]vents.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Oo]nline.*[Gg]MAT.*[Pp]rep.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Oo]nline.*[Gg]RE.*[Pp]rep.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]xecutive.*[Ee]ducation.*[Nn]avigator.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ww]hich.*[Mm]BA.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Jj]obs.*[Bb]oard.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ll]earning.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ee]conomist.*[Ss]tore.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ee]conomist.*[Ii]ntelligence.*[Uu]nit.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]he.*[Ee]conomist.*[Cc]orporate.*[Nn]etwork.*\]\([^)]+\)\s*$',
+        
+        # Media
+        r'^\s*\*\s*\[.*[Aa]udio.*[Ee]dition.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]conomist.*[Ff]ilms.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]conomist.*[Rr]adio.*\]\([^)]+\)\s*$',
+        
+        # Login and subscription forms
+        r'^\s*[Ll]og\s+in\s+or\s+sign\s+up.*$',
+        r'^\s*[Ee]-mail\s+address\s*$',
+        r'^\s*[Pp]assword\s*$',
+        r'^\s*[Kk]eep\s+me\s+logged\s+in\s*$',
+        r'^\s*\[.*[Ff]orgot\s+password.*\]\([^)]+\)\s*$',
+        r'^\s*[Nn]ew\s+to.*[Tt]he.*[Ee]conomist.*\?.*$',
+        r'^\s*\[.*[Ss]ign\s+up\s+now.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Aa]ctivate.*[Dd]igital.*[Ss]ubscription.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Mm]anage.*[Ss]ubscription.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Rr]enew.*[Ss]ubscription.*\]\([^)]+\)\s*$',
+        
+        # Topics and navigation
+        r'^\s*\[.*[Tt]opics.*\]\([^)]+\)\s*$',
+        
+        # Current edition and more links
+        r'^\s*\[.*[Cc]urrent\s+edition.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Mm]ore.*\]\([^)]+\)\s*$',
+        
+        # Latest Stories section
+        r'^\s*#\s*[Ll]atest.*[Ss]tories\s*$',
+        r'^\s*\*\s*###\s*\[.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]ulliver.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Dd]emocracy.*[Ii]n.*[Aa]merica.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Pp]rospero.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Oo]pen.*[Ff]uture.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]rasmus.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*[0-9]+\s+days?\s+ago\s*$',
+        r'^\s*\[.*[Ss]ee\s+more.*\]\([^)]+\)\s*$',
+        
+        # Newsletter and subscription
+        r'^\s*\*\*[Gg]et\s+our\s+daily\s+newsletter\*\*\s*$',
+        r'^\s*[Uu]pgrade\s+your\s+inbox.*$',
+        
+        # Footer content
+        r'^\s*##\s*[Cc]lassified.*[Aa]ds\s*$',
+        r'^\s*\*\s*\[.*[Hh]elp.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Oo]pen.*[Ff]uture.*\]\([^)]+\)\s*$',
+        r'^\s*###\s*[Kk]eep.*[Uu]pdated\s*$',
+        r'^\s*\*\s*\[.*[Ss]ubscribe.*[Tt]he.*[Ee]conomist.*[Nn]ewsletters.*\]\([^)]+\)\s*$',
+        r'^\s*\*\*[Ss]ign\s+up\s+to\s+get\s+more\s+from.*[Tt]he.*[Ee]conomist.*\*\*\s*$',
+        r'^\s*[Gg]et\s+3\s+free\s+articles.*$',
+        r'^\s*\*\s*\[.*[Aa]dvertise.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Rr]eprints.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Cc]areers.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Mm]edia.*[Cc]entre.*\]\([^)]+\)\s*$',
+        r'^\s*[Pp]ublished\s+since.*1843.*$',
+        r'^\s*[Aa] severe\s+contest.*$',
+        
+        # Legal and policy
+        r'^\s*\*\s*\[.*[Tt]erms.*[Oo]f.*[Uu]se.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Pp]rivacy.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Cc]ookie.*[Pp]olicy.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*[Mm]anage\s+[Cc]ookies\s*$',
+        r'^\s*\*\s*\[.*[Aa]ccessibility.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Mm]odern.*[Ss]lavery.*[Ss]tatement.*\]\([^)]+\)\s*$',
+        r'^\s*[Oo]ur\s+site\s+uses\s+cookies.*$',
+        r'^\s*[Tt]o\s+receive\s+the\s+best\s+experience.*$',
+        r'^\s*[Vv]iew\s+our.*[Cc]ookie\s+policy.*$',
+        r'^\s*[Mm]anage\s+your\s+cookies.*$',
+        r'^\s*[Aa]llow\s*$',
+        
+        # Empty or separator lines
+        r'^\s*$',
+        r'^\s*\.\s*$',
+        r'^\s*[|\-\s]+\s*$',
+        r'^\s*\*\s*\*\s*\*\s*$',
+    ]
+    
+    compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in enhanced_patterns]
+    
+    for line in lines:
+        line_stripped = line.strip()
+        
+        # Skip empty lines
+        if not line_stripped:
+            cleaned_lines.append(line)
+            continue
+        
+        # Check against enhanced patterns
+        should_remove = False
+        for pattern in compiled_patterns:
+            if pattern.match(line_stripped):
+                should_remove = True
+                break
+        
+        # Additional checks for link-heavy lines
+        if not should_remove:
+            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+            word_count = len(line_stripped.split())
+            if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
+                nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe', 'latest', 'leaders', 'briefing', 'united', 'states', 'americas', 'asia', 'china', 'europe', 'britain', 'international', 'business', 'finance', 'economics', 'science', 'technology', 'books', 'arts', 'obituary', 'special', 'reports', 'technology', 'quarterly', 'debates']
+                nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
+                if nav_count > 0:
+                    should_remove = True
+        
+        # Keep the line if it doesn't match removal patterns
+        if not should_remove:
+            cleaned_lines.append(line)
+    
+    # Join and clean up
+    cleaned_content = '\n'.join(cleaned_lines)
+    cleaned_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_content)
+    cleaned_content = cleaned_content.strip()
+    
+    return cleaned_content
+
+
 def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
-    """Conservative web clipping cleaner that removes obvious boilerplate while preserving main content."""
+    """Enhanced web clipping cleaner using Trafilatura and advanced cleaning patterns."""
     import re
+    
+    # Check if this is a web clipping
+    is_web_clipping = False
+    if frontmatter:
+        is_web_clipping = frontmatter.get('source', '').startswith(('http://', 'https://'))
+    else:
+        # Fallback: check content for web indicators
+        web_indicators = ['http://', 'https://', 'www.', 'html', 'div', 'class=', 'id=']
+        is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
+    
+    # For web clippings, skip extraction libraries and go directly to enhanced cleaning
+    # since Trafilatura and Readability are designed for HTML, not Markdown
+    if is_web_clipping:
+        # Apply enhanced cleaning directly to the content
+        cleaned_content = apply_enhanced_cleaning(content)
+        if len(cleaned_content.strip()) > 100:
+            return cleaned_content
     
     # Check if this is heavily HTML-structured content
     if is_heavily_html_structured(content):
         return clean_heavily_html_structured(content, frontmatter)
     
-    # First, convert HTML tables to Markdown tables
+    # Convert HTML tables to Markdown first
     content = convert_html_tables_to_markdown(content)
     
-    # Split into lines for processing
-    lines = content.split('\n')
-    cleaned_lines = []
-    
-    # Skip frontmatter
-    in_frontmatter = False
-    frontmatter_end = 0
-    
-    for i, line in enumerate(lines):
-        if line.strip() == '---':
-            if not in_frontmatter:
-                in_frontmatter = True
-                cleaned_lines.append(line)
-            else:
-                frontmatter_end = i
-                cleaned_lines.append(line)
-                break
-        elif in_frontmatter:
-            cleaned_lines.append(line)
-    
-    # Process the rest of the content
-    content_lines = lines[frontmatter_end + 1:]
-    
-    # Check if this is a web clipping (has source URL in frontmatter)
-    is_web_clipping = False
-    if frontmatter and frontmatter.get('source') and 'http' in str(frontmatter['source']):
-        is_web_clipping = True
-    elif frontmatter_end > 0:
-        # Fallback to manual parsing if frontmatter not provided
-        frontmatter_text = '\n'.join(lines[:frontmatter_end+1])
-        if 'source:' in frontmatter_text and 'http' in frontmatter_text:
-            is_web_clipping = True
-    
-    # For web clippings, remove entire boilerplate sections
-    if is_web_clipping:
-        content_lines = remove_boilerplate_sections(content_lines)
-    
-    # Conservative patterns to remove - only very obvious boilerplate
-    conservative_patterns = [
-        # Social media sharing buttons
-        r'^\s*\*\s*\[.*[Tt]witter.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ff]acebook.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ll]inkedin.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ww]hatsapp.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ss]hare.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ff]ollow.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ss]ubscribe.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Tt]weet.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ll]ike.*\]\(http[^)]+\)\s*$',
-        
-        # Navigation menu items - more comprehensive patterns
-        r'^\s*\*\s*\[.*[Mm]enu.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Hh]ome.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Bb]io.*[Hh]ome.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Cc]ertifications.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Rr]eferences.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ee]ndorsements.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ss]ecurity.*[Aa]rticles.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Pp]rojects.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Pp]rofessional.*[Dd]evelopment.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ii]nfo[Ss]ec.*[Tt]oolkit.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ff]avorite.*[Qq]uotes.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Bb]ataan.*[Mm]emorial.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Uu][Ss].*[Aa]ir.*[Ff]orce.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Tt]omb.*[Oo]f.*[Uu]nknowns.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Cc]asual.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Bb]ataan.*[Mm]arch.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ww]ounded.*[Ww]arriors.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Mm]otorcycle.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Yy]ou[Tt]ube.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ss]ite.*[Mm]ap.*\]\(http[^)]+\)\s*$',
-        
-        # General navigation patterns
-        r'^\s*\*\s*\[.*[Aa]bout.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Cc]ontact.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ss]earch.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Nn]avigation.*\]\(http[^)]+\)\s*$',
-        
-        # Accessibility and skip links
-        r'^\s*\[.*[Aa]ccessibility.*\]\(http[^)]+\)\s*$',
-        r'^\s*\[.*[Ss]kip.*\]\(http[^)]+\)\s*$',
-        
-        # Legal and policy links
-        r'^\s*\*\s*\[.*[Pp]rivacy.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Cc]ookie.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Tt]erms.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Cc]opyright.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*\s*\[.*[Ll]egal.*\]\(http[^)]+\)\s*$',
-        
-        # Empty or minimal content
-        r'^\s*\.\s*$',
-        r'^\s*[\|\-\s]+\s*$',
-        r'^\s*$',
-        
-        # Very specific web boilerplate phrases
-        r'^\s*[Cc]omments have not been enabled.*',
-        r'^\s*[Ff]ollow the topics mentioned.*',
-        r'^\s*[Ff]ollow the authors.*',
-        r'^\s*[Tt]ake a tour.*',
-        r'^\s*[Ww]elcome to the New.*',
-        
-        # Advertisement and promotional content
-        r'^\s*[Aa]dvertisement.*',
-        r'^\s*[Ss]ponsored.*',
-        r'^\s*[Pp]romoted.*',
-        r'^\s*[Aa]d\s*$',
-        
-        # Social media and sharing
-        r'^\s*[Ss]hare.*',
-        r'^\s*[Ff]ollow.*',
-        r'^\s*[Ff]ollow [Uu]s.*',
-        r'^\s*[Ll]ike.*',
-        r'^\s*[Tt]weet.*',
-        r'^\s*[Ss]ubscribe.*',
-        r'^\s*[Mm]y [Ss]ubscription.*',
-        
-        # Navigation and menus
-        r'^\s*\*?\s*\[.*[Mm]enu.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Hh]ome.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Bb]usiness.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Nn]ational.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Ww]orld.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Ss]ports.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Ll]ife.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Vv]iews.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Ee]ditor.*[Cc]hoice.*\]\(http[^)]+\)\s*$',
-        
-        # Footer and copyright content
-        r'^\s*[Cc]opyright.*',
-        r'^\s*©.*',
-        r'^\s*[Aa]ll rights reserved.*',
-        r'^\s*[Pp]artners?:.*',
-        r'^\s*[Ff]rom [Oo]ur [Nn]etworks.*',
-        r'^\s*[Mm]ost [Vv]iewed.*',
-        r'^\s*[Mm]ost [Cc]ommented.*',
-        r'^\s*[Tt]op [Gg]ainer.*',
-        r'^\s*[Tt]op [Ll]oser.*',
-        
-        # Stock market data and tables
-        r'^\s*[A-Z]{3,4}\s+.*\s+\d+.*\s*[+-]?\d+\.?\d*%?\s*$',
-        r'^\s*[Pp]rice\s*$',
-        r'^\s*%?\s*[Cc]hange\s*$',
-        r'^\s*[Ss]tock [Ee]xchange.*',
-        
-        # Job listings and classifieds
-        r'^\s*[Jj]ob.*',
-        r'^\s*[Cc]areer.*',
-        r'^\s*[Cc]lassified.*',
-        r'^\s*[Ll]ook for more jobs.*',
-        
-        # Related articles and recommendations
-        r'^\s*[Rr]ead also:.*',
-        r'^\s*[Rr]elated.*',
-        r'^\s*[Mm]ore from.*',
-        r'^\s*[Ll]atest.*',
-        r'^\s*[Rr]ecommended.*',
-        r'^\s*[Vv]iew tips.*',
-        r'^\s*[Gg]ive feedback.*',
-        r'^\s*[Ss]upport.*',
-        r'^\s*[Ll]egal & Privacy.*',
-        r'^\s*[Ss]ervices.*',
-        
-        # Social media and sharing sections
-        r'^\s*#\s*[Ss]ocial [Mm]edia.*',
-        r'^\s*[Mm]ore [Ss]haring.*',
-        r'^\s*[Ss]hare.*[Ss]ervices.*',
-        r'^\s*[Ss]haring [Tt]ools.*',
-        
-        # Header navigation and logos
-        r'^\s*!\[\[.*\]\].*\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Hh]eadlines.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Aa]rchipelago.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Jj]akarta.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Pp]hotos.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Vv]ideos.*\]\(http[^)]+\)\s*$',
-        r'^\s*\*?\s*\[.*[Oo]utlook.*\]\(http[^)]+\)\s*$',
-        
-        # Footer sections
-        r'^\s*##\s*[Pp]ost [Yy]our [Ss]ay.*',
-        r'^\s*[Ss]elected comments.*',
-        r'^\s*\d+\s+comments.*',
-        r'^\s*\+\s*[Ff]ollow.*',
-        r'^\s*[Pp]ost comment as.*',
-        r'^\s*\[Powered by.*\]\(http[^)]+\)\s*$',
-        
-        # Related articles and news sections
-        r'^\s*\*\s*\d+\s*$',
-        r'^\s*\*\s*\[.*\]\(http[^)]+\)\s*$',
-        r'^\s*[Ll]ook for more jobs.*',
-        r'^\s*\[Look for more jobs.*\]\(http[^)]+\)\s*$',
-        
-        # Travel and entertainment sections
-        r'^\s*[Ll]atest TRAVELOG.*',
-        r'^\s*[Tt]op TRAVELOG.*',
-        r'^\s*[Ss]hare your travel experience.*',
-        r'^\s*[Ff]ind more about your.*',
-        
-        # Footer navigation
-        r'^\s*####\s*[Nn]ews.*',
-        r'^\s*####\s*[Vv]iews.*',
-        r'^\s*####\s*[Ll]ife.*',
-        r'^\s*####\s*[Ss]ervices.*',
-        r'^\s*PT\.\s+.*',
-        
-        # Duplicate URLs and tracking parameters
-        r'^<http[^>]*utm_[^>]*>$',
-        r'^<http[^>]*\?utm_[^>]*>$',
-        r'^\s*<http[^>]*#><http[^>]*#><http[^>]*#>\s*$',
-        
-        # Social media icon links
-        r'^\s*\*\s*\[\[#\|.*\]\]\s*$',
-        r'^\s*\*\s*\[\[#\|!\[.*\]\(http[^)]+\)\]\]\s*$',
-        
-        # Section separators and empty content
-        r'^\s*###\s*$',
-        r'^\s*---+\s*$',
-        r'^\s*\*\*\*\s*$',
-        r'^\s*[Tt]ools.*',
-        r'^\s*[Mm]ore from the FT Group.*',
-        r'^\s*[Mm]arkets data delayed.*',
-        r'^\s*[Tt]he Financial Times.*',
-        r'^\s*[Ii]nternational Edition.*',
-        r'^\s*[Ss]earch the FT.*',
-        r'^\s*[Ss]witch to UK Edition.*',
-        r'^\s*[Tt]op sections.*',
-        r'^\s*FT recommends.*',
-        
-        # Related articles and recommendations
-        r'^\s*##\s*\[.*\]\(https://www\.ft\.com/content/[^)]+\)\s*Premium\s*$',
-        r'^\s*##\s*\[.*\]\(https://www\.ft\.com/content/[^)]+\)\s*$',
-        r'^\s*##\s*\[.*\]\(http[^)]+\)\s*Premium\s*$',
-        r'^\s*##\s*\[.*\]\(http[^)]+\)\s*$',
-        r'^\s*[A-Za-z].*[Ss]urvey finds.*',
-        r'^\s*[A-Za-z].*[Ee]xpected to fuel.*',
-        r'^\s*[A-Za-z].*[Ss]hould support.*',
-        r'^\s*[A-Za-z].*[Tt]arget.*[Uu]nlikely.*',
-        r'^\s*[A-Za-z].*[Oo]ptimism.*[Qq]uarter.*',
-        r'^\s*[A-Za-z].*[Gg]rowth.*[Rr]ecover.*',
-        r'^\s*[A-Za-z].*[Ss]tability.*[Pp]olicy.*',
-        r'^\s*[A-Za-z].*[Ll]osing.*[Ii]nvestors.*',
-        r'^\s*[A-Za-z].*[Bb]oost.*[Ff]iscal.*',
-        
-        # FT-specific navigation and footer
-        r'^\s*##\s*myFT\s*$',
-        r'^\s*###\s*[Ww]elcome to the New.*',
-        r'^\s*###\s*[Ss]upport\s*$',
-        r'^\s*###\s*[Ll]egal & Privacy\s*$',
-        r'^\s*\*\s*FT recommends\s*$',
-        r'^\s*None\s*$',
-        r'^\s*<https://www\.ft\.com/content/[^>]+>\s*$',
-        
-        # Author links and bylines
-        r'^\s*EM Squared\s*\[.*\]\(https://www\.ft\.com/stream/authorsId/[^)]+\)\s*$',
-        r'^\s*[A-Za-z]+\s*[A-Za-z]+\s*\[.*\]\(https://www\.ft\.com/stream/authorsId/[^)]+\)\s*$',
-    ]
-    
-    # Compile patterns for efficiency
-    compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in conservative_patterns]
-    
-    # Process each line
-    for line in content_lines:
-        line_stripped = line.strip()
-        
-        # Skip empty lines
-        if not line_stripped:
-            cleaned_lines.append(line)  # Keep empty lines for formatting
-            continue
-        
-        # For non-web clippings, be very conservative
-        if not is_web_clipping:
-            # Only remove obvious separator lines
-            should_remove = False
-            obvious_boilerplate = [
-                r'^\s*\|.*\|\s*$',  # Table rows with just separators
-                r'^\s*\.\s*$',  # Just a dot
-                r'^\s*[|\-\s]+\s*$',  # Separator lines
-            ]
-            for pattern in obvious_boilerplate:
-                if re.match(pattern, line_stripped):
-                    should_remove = True
-                    break
-            
-            # Keep everything else for non-web clippings
-            if not should_remove:
-                cleaned_lines.append(line)
-        else:
-            # For web clippings, use conservative cleaning
-            should_remove = False
-            for pattern in compiled_patterns:
-                if pattern.match(line_stripped):
-                    should_remove = True
-                    break
-            
-            # Additional conservative checks
-            if not should_remove:
-                # Only remove lines that are clearly navigation (mostly links with nav words)
-                link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
-                word_count = len(line_stripped.split())
-                if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
-                    # Check if it contains navigation words
-                    nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe']
-                    nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
-                    if nav_count > 0:
-                        should_remove = True
-            
-            # Keep the line if it doesn't match removal patterns
-            if not should_remove:
-                cleaned_lines.append(line)
-    
-    # Join the cleaned content
-    cleaned_content = '\n'.join(cleaned_lines)
-    
-    # Post-process to remove excessive whitespace
-    cleaned_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_content)
-    cleaned_content = cleaned_content.strip()
+    # Apply enhanced cleaning patterns
+    cleaned_content = apply_enhanced_cleaning(content)
     
     return cleaned_content

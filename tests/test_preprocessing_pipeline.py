@@ -31,8 +31,8 @@ def test_preprocessing_pipeline():
     print(f"Test preprocessed vault: {preprocessed_vault}")
     print()
     
-    # Step 0: Randomly select and copy 20 fresh notes from real vault
-    print("Step 0: Randomly selecting 20 fresh notes from real vault...")
+    # Step 0: Randomly select and copy 50 fresh notes from real vault
+    print("Step 0: Randomly selecting 50 fresh notes from real vault...")
     print("-" * 40)
     
     import random
@@ -73,9 +73,9 @@ def test_preprocessing_pipeline():
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # Select a mix: 5 with attachments, 15 without
-    selected_with_attachments = random.sample(notes_with_attachments, min(5, len(notes_with_attachments)))
-    selected_without_attachments = random.sample(notes_without_attachments, 15)
+    # Select a mix: 10 with attachments, 40 without
+    selected_with_attachments = random.sample(notes_with_attachments, min(10, len(notes_with_attachments)))
+    selected_without_attachments = random.sample(notes_without_attachments, 40)
     selected_notes = selected_with_attachments + selected_without_attachments
     
     print(f"Selected {len(selected_with_attachments)} notes with attachments")

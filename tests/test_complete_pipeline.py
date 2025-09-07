@@ -33,8 +33,8 @@ def test_complete_pipeline():
     print(f"Curated vault: {curated_vault}")
     print()
     
-    # Step 0: Randomly select and copy 20 fresh notes from real vault
-    print("Step 0: Randomly selecting 20 fresh notes from real vault...")
+    # Step 0: Randomly select and copy 50 fresh notes from real vault
+    print("Step 0: Randomly selecting 50 fresh notes from real vault...")
     print("-" * 40)
     
     import random
@@ -81,9 +81,9 @@ def test_complete_pipeline():
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # Select a mix: 2 with attachments, 8 without
-    selected_with_attachments = random.sample(notes_with_attachments, min(2, len(notes_with_attachments)))
-    selected_without_attachments = random.sample(notes_without_attachments, 8)
+    # Select a mix: 10 with attachments, 40 without
+    selected_with_attachments = random.sample(notes_with_attachments, min(10, len(notes_with_attachments)))
+    selected_without_attachments = random.sample(notes_without_attachments, 40)
     selected_notes = selected_with_attachments + selected_without_attachments
     
     print(f"Selected {len(selected_with_attachments)} notes with attachments")
@@ -132,10 +132,38 @@ def test_complete_pipeline():
                         print(f"    + attachments: ERROR copying from {alt_dir.name} - {e}")
                         continue
             
+            # If still not found, try to find attachments by reading the note content
+            if not found_attachments:
+                try:
+                    with open(note_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Look for attachment references in the content
+                    import re
+                    attachment_refs = re.findall(r'!\[\[attachments/([^\]]+)\]\]', content)
+                    if attachment_refs:
+                        # Try to find the attachment folder by the referenced file
+                        for ref in attachment_refs:
+                            ref_stem = ref.split('/')[0]  # Get the folder name
+                            potential_attachments_dir = Path(raw_vault) / "attachments" / ref_stem
+                            if potential_attachments_dir.exists():
+                                try:
+                                    new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
+                                    shutil.copytree(potential_attachments_dir, new_attachments_dir)
+                                    attachment_count = len(list(potential_attachments_dir.iterdir()))
+                                    print(f"    + attachments: {attachment_count} files (found by content reference: {ref_stem})")
+                                    found_attachments = True
+                                    break
+                                except Exception as e:
+                                    print(f"    + attachments: ERROR copying from {ref_stem} - {e}")
+                                    continue
+                except Exception as e:
+                    print(f"    + attachments: ERROR reading note content - {e}")
+            
             if not found_attachments:
                 print(f"    + attachments: none found")
     
-    print(f"✓ Copied 10 fresh notes to test folder")
+    print(f"✓ Copied 50 fresh notes to test folder")
     print()
     
     # Update raw_vault to use test folder for preprocessing
@@ -163,8 +191,8 @@ def test_complete_pipeline():
     )
     
     try:
-        # Process all 20 notes (they're already selected and copied)
-        print("Processing all 20 selected notes...")
+        # Process all 50 notes (they're already selected and copied)
+        print("Processing all 50 selected notes...")
         results = processor.process_vault()
         
         print(f"Preprocessing results:")
@@ -195,7 +223,12 @@ def test_complete_pipeline():
     try:
         # Run curation on preprocessed data
         print("Running curation on preprocessed data...")
-        run(test_cfg, dry_run=False)
+        # Override the attachments path to use preprocessed attachments
+        run(test_cfg, 
+            vault=preprocessed_vault, 
+            attachments=test_cfg['paths']['test_preprocessed_attachments'], 
+            out_notes=test_cfg['paths']['test_curated_notes'], 
+            dry_run=False)
         print("✓ Curation pipeline completed successfully")
         
     except Exception as e:
