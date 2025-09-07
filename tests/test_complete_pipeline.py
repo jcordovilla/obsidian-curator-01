@@ -23,15 +23,98 @@ def test_complete_pipeline():
     # Get test configuration
     test_cfg = config.get_test_config()
     
-    # Test paths
-    raw_vault = test_cfg['paths']['test_raw_vault']
+    # Test paths - use real vault for input, test folders for output
+    raw_vault = "/Users/jose/Documents/Obsidian/Evermd"  # Real vault with 3,662 notes
     preprocessed_vault = test_cfg['paths']['test_preprocessed_vault']
     curated_vault = test_cfg['paths']['test_curated_vault']
     
-    print(f"Raw vault: {raw_vault}")
+    print(f"Raw vault: {raw_vault} (3,662 notes available)")
     print(f"Preprocessed vault: {preprocessed_vault}")
     print(f"Curated vault: {curated_vault}")
     print()
+    
+    # Step 0: Randomly select and copy 20 fresh notes from real vault
+    print("Step 0: Randomly selecting 20 fresh notes from real vault...")
+    print("-" * 40)
+    
+    import random
+    import shutil
+    
+    # Clean test folders first
+    if os.path.exists(preprocessed_vault):
+        shutil.rmtree(preprocessed_vault)
+        print(f"✓ Cleaned preprocessed vault: {preprocessed_vault}")
+    
+    if os.path.exists(curated_vault):
+        shutil.rmtree(curated_vault)
+        print(f"✓ Cleaned curated vault: {curated_vault}")
+    
+    # Clean and recreate raw test folder
+    test_raw_vault = test_cfg['paths']['test_raw_vault']
+    if os.path.exists(test_raw_vault):
+        shutil.rmtree(test_raw_vault)
+        print(f"✓ Cleaned raw test vault: {test_raw_vault}")
+    
+    # Recreate test folders
+    os.makedirs(test_raw_vault, exist_ok=True)
+    os.makedirs(f"{test_raw_vault}/notes", exist_ok=True)
+    os.makedirs(f"{test_raw_vault}/attachments", exist_ok=True)
+    os.makedirs(preprocessed_vault, exist_ok=True)
+    os.makedirs(curated_vault, exist_ok=True)
+    
+    # Get all notes from real vault
+    all_notes = list(Path(raw_vault).rglob("*.md"))
+    print(f"Found {len(all_notes)} notes in real vault")
+    
+    # Find notes with attachments first
+    notes_with_attachments = []
+    notes_without_attachments = []
+    
+    for note in all_notes:
+        note_stem = note.stem
+        att_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        if att_dir.exists():
+            notes_with_attachments.append(note)
+        else:
+            notes_without_attachments.append(note)
+    
+    print(f"Notes with attachments: {len(notes_with_attachments)}")
+    print(f"Notes without attachments: {len(notes_without_attachments)}")
+    
+    # Select a mix: 5 with attachments, 15 without
+    selected_with_attachments = random.sample(notes_with_attachments, min(5, len(notes_with_attachments)))
+    selected_without_attachments = random.sample(notes_without_attachments, 15)
+    selected_notes = selected_with_attachments + selected_without_attachments
+    
+    print(f"Selected {len(selected_with_attachments)} notes with attachments")
+    print(f"Selected {len(selected_without_attachments)} notes without attachments")
+    print(f"Total: {len(selected_notes)} notes for testing")
+    
+    # Copy selected notes to test folder
+    for i, note_path in enumerate(selected_notes, 1):
+        # Copy the note file
+        new_note_name = f"test_note_{i:02d}_{note_path.name}"
+        new_note_path = Path(test_raw_vault) / "notes" / new_note_name
+        shutil.copy2(note_path, new_note_path)
+        print(f"  Copied: {note_path.name} -> {new_note_name}")
+        
+        # Copy associated attachments from central attachments folder
+        note_stem = note_path.stem
+        real_attachments_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        
+        if real_attachments_dir.exists():
+            new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
+            shutil.copytree(real_attachments_dir, new_attachments_dir)
+            attachment_count = len(list(real_attachments_dir.iterdir()))
+            print(f"    + attachments: {attachment_count} files")
+        else:
+            print(f"    + attachments: none")
+    
+    print(f"✓ Copied 20 fresh notes to test folder")
+    print()
+    
+    # Update raw_vault to use test folder for preprocessing
+    raw_vault = test_raw_vault
     
     # Step 1: Preprocessing
     print("Step 1: Preprocessing raw notes...")
@@ -55,16 +138,18 @@ def test_complete_pipeline():
     )
     
     try:
-        # Process a sample of 5 notes
-        print("Processing sample of 5 notes...")
-        results = processor.process_sample(sample_size=5, dry_run=False)
+        # Process all 20 notes (they're already selected and copied)
+        print("Processing all 20 selected notes...")
+        results = processor.process_vault()
         
         print(f"Preprocessing results:")
-        print(f"  Files processed: {results['sample_size']}")
-        print(f"  Successful: {results['success_count']}")
-        print(f"  Failed: {results['failure_count']}")
+        summary = results['summary']
+        print(f"  Files processed: {summary['processed_files']}")
+        print(f"  Successful: {summary['processed_files']}")
+        print(f"  Failed: {summary['failed_files']}")
+        print(f"  Skipped: {summary['skipped_files']}")
         
-        if results['success_count'] == 0:
+        if summary['processed_files'] == 0:
             print("Error: Preprocessing failed - no notes were processed")
             return False
         

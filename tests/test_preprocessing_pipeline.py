@@ -14,19 +14,95 @@ import config
 from src.preprocessing import BatchProcessor
 
 def test_preprocessing_pipeline():
-    """Test preprocessing pipeline with test data."""
-    print("Testing preprocessing pipeline with test data...")
+    """Test preprocessing pipeline with fresh random sampling."""
+    print("Testing preprocessing pipeline with fresh random sampling...")
     print("=" * 60)
     
     # Get test configuration
     test_cfg = config.get_test_config()
     
-    # Test paths
+    # Test paths - use real vault for sampling, test folders for output
+    real_vault = "/Users/jose/Documents/Obsidian/Evermd"  # Real vault with 3,662 notes
     raw_vault = test_cfg['paths']['test_raw_vault']
     preprocessed_vault = test_cfg['paths']['test_preprocessed_vault']
     
-    print(f"Raw vault: {raw_vault}")
-    print(f"Preprocessed vault: {preprocessed_vault}")
+    print(f"Real vault: {real_vault} (3,662 notes available)")
+    print(f"Test raw vault: {raw_vault}")
+    print(f"Test preprocessed vault: {preprocessed_vault}")
+    print()
+    
+    # Step 0: Randomly select and copy 20 fresh notes from real vault
+    print("Step 0: Randomly selecting 20 fresh notes from real vault...")
+    print("-" * 40)
+    
+    import random
+    import shutil
+    
+    # Clean test folders first
+    if os.path.exists(preprocessed_vault):
+        shutil.rmtree(preprocessed_vault)
+        print(f"✓ Cleaned preprocessed vault: {preprocessed_vault}")
+    
+    # Clean and recreate raw test folder
+    if os.path.exists(raw_vault):
+        shutil.rmtree(raw_vault)
+        print(f"✓ Cleaned raw test vault: {raw_vault}")
+    
+    # Recreate test folders
+    os.makedirs(raw_vault, exist_ok=True)
+    os.makedirs(f"{raw_vault}/notes", exist_ok=True)
+    os.makedirs(f"{raw_vault}/attachments", exist_ok=True)
+    os.makedirs(preprocessed_vault, exist_ok=True)
+    
+    # Get all notes from real vault
+    all_notes = list(Path(real_vault).rglob("*.md"))
+    print(f"Found {len(all_notes)} notes in real vault")
+    
+    # Find notes with attachments first
+    notes_with_attachments = []
+    notes_without_attachments = []
+    
+    for note in all_notes:
+        note_stem = note.stem
+        att_dir = Path(real_vault) / "attachments" / f"{note_stem}.resources"
+        if att_dir.exists():
+            notes_with_attachments.append(note)
+        else:
+            notes_without_attachments.append(note)
+    
+    print(f"Notes with attachments: {len(notes_with_attachments)}")
+    print(f"Notes without attachments: {len(notes_without_attachments)}")
+    
+    # Select a mix: 5 with attachments, 15 without
+    selected_with_attachments = random.sample(notes_with_attachments, min(5, len(notes_with_attachments)))
+    selected_without_attachments = random.sample(notes_without_attachments, 15)
+    selected_notes = selected_with_attachments + selected_without_attachments
+    
+    print(f"Selected {len(selected_with_attachments)} notes with attachments")
+    print(f"Selected {len(selected_without_attachments)} notes without attachments")
+    print(f"Total: {len(selected_notes)} notes for testing")
+    
+    # Copy selected notes to test folder
+    for i, note_path in enumerate(selected_notes, 1):
+        # Copy the note file
+        new_note_name = f"test_note_{i:02d}_{note_path.name}"
+        new_note_path = Path(raw_vault) / "notes" / new_note_name
+        shutil.copy2(note_path, new_note_path)
+        print(f"  Copied: {note_path.name} -> {new_note_name}")
+        
+        # Copy associated attachments from central attachments folder
+        note_stem = note_path.stem
+        real_attachments_dir = Path(real_vault) / "attachments" / f"{note_stem}.resources"
+        
+        if real_attachments_dir.exists():
+            new_attachments_dir = Path(raw_vault) / "attachments" / f"{new_note_name}.resources"
+            shutil.copytree(real_attachments_dir, new_attachments_dir)
+            attachment_count = len(list(real_attachments_dir.iterdir()))
+            print(f"    + attachments: {attachment_count} files")
+        else:
+            print(f"    + attachments: none")
+    
+    print(f"✓ Copied 20 fresh notes to test folder")
     print()
     
     # Check if raw test data exists

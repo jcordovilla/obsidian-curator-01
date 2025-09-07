@@ -243,9 +243,223 @@ class WebClippingCleaner:
         # If multiple web indicators present, likely a web clipping
         return indicator_count >= 2
 
+def convert_html_tables_to_markdown(content: str) -> str:
+    """Convert HTML tables to Markdown tables."""
+    import re
+    
+    # Find HTML tables wrapped in divs (like Joplin exports)
+    table_pattern = r'<div[^>]*class="[^"]*table[^"]*"[^>]*><table[^>]*>(.*?)</table></div>'
+    
+    def convert_table(match):
+        table_html = match.group(1)
+        
+        # Extract table rows
+        row_pattern = r'<tr[^>]*>(.*?)</tr>'
+        rows = re.findall(row_pattern, table_html, re.DOTALL)
+        
+        if not rows:
+            return match.group(0)  # Return original if no rows found
+        
+        markdown_rows = []
+        
+        for i, row in enumerate(rows):
+            # Extract cells
+            cell_pattern = r'<t[dh][^>]*>(.*?)</t[dh]>'
+            cells = re.findall(cell_pattern, row, re.DOTALL)
+            
+            if not cells:
+                continue
+                
+            # Clean cell content
+            cleaned_cells = []
+            for cell in cells:
+                # Convert <ul><li> to markdown lists
+                cell = re.sub(r'<ul[^>]*>', '', cell)
+                cell = re.sub(r'</ul>', '', cell)
+                cell = re.sub(r'<li[^>]*>', '• ', cell)
+                cell = re.sub(r'</li>', '\n', cell)
+                
+                # Convert <br> to line breaks
+                cell = re.sub(r'<br[^>]*>', '\n', cell)
+                
+                # Remove other HTML tags but preserve text
+                cell_text = re.sub(r'<[^>]+>', '', cell)
+                
+                # Decode HTML entities
+                cell_text = cell_text.replace('&amp;', '&')
+                cell_text = cell_text.replace('&nbsp;', ' ')
+                cell_text = cell_text.replace('&lt;', '<')
+                cell_text = cell_text.replace('&gt;', '>')
+                
+                # Clean up whitespace and preserve line breaks
+                lines = [line.strip() for line in cell_text.split('\n') if line.strip()]
+                cell_text = '\n'.join(lines)
+                
+                cleaned_cells.append(cell_text)
+            
+            if cleaned_cells:
+                # Create markdown row
+                markdown_row = '| ' + ' | '.join(cleaned_cells) + ' |'
+                markdown_rows.append(markdown_row)
+                
+                # Add separator row after header (first row)
+                if i == 0:
+                    separator = '| ' + ' | '.join(['---'] * len(cleaned_cells)) + ' |'
+                    markdown_rows.append(separator)
+        
+        if markdown_rows:
+            return '\n'.join(markdown_rows)
+        else:
+            return match.group(0)  # Return original if conversion failed
+    
+    # Apply table conversion
+    content = re.sub(table_pattern, convert_table, content, flags=re.DOTALL | re.IGNORECASE)
+    
+    return content
+
+def remove_boilerplate_sections(content_lines: List[str]) -> List[str]:
+    """Remove entire sections that are clearly boilerplate from web clippings."""
+    import re
+    
+    cleaned_lines = []
+    skip_section = False
+    i = 0
+    
+    while i < len(content_lines):
+        line = content_lines[i]
+        line_lower = line.lower().strip()
+        
+        # Check if this line starts a boilerplate section
+        if any(pattern in line_lower for pattern in [
+            'more from the economist',
+            'most viewed',
+            'most commented', 
+            'advertisement',
+            'follow the economist',
+            'from our networks',
+            'stock exchange',
+            'top gainer',
+            'top loser',
+            'job listings',
+            'classified ads',
+            'partners:',
+            'copyright',
+            'all rights reserved',
+            'sharethis',
+            'read also:',
+            'related articles',
+            'latest updates',
+            'most viewed',
+            'most commented',
+            'social media tools',
+            'more sharing',
+            'sharing services',
+            'share services'
+        ]):
+            # Skip this section until we find a clear end or another main heading
+            skip_section = True
+            i += 1
+            continue
+        
+        # Check if we should stop skipping (new main heading or clear content)
+        if skip_section:
+            if (line.startswith('# ') or 
+                line.startswith('## ') or
+                (line.strip() and not line.startswith('*') and not line.startswith('![') and 
+                 not any(word in line_lower for word in ['advertisement', 'follow', 'share', 'subscribe', 'copyright']))):
+                skip_section = False
+            else:
+                i += 1
+                continue
+        
+        cleaned_lines.append(line)
+        i += 1
+    
+    return cleaned_lines
+
+def is_heavily_html_structured(content: str) -> bool:
+    """Check if content is heavily HTML-structured (like ESADE pages)."""
+    import re
+    
+    # Count HTML elements
+    html_tags = len(re.findall(r'<[^>]+>', content))
+    total_chars = len(content)
+    
+    # If more than 30% of content is HTML tags, it's heavily structured
+    if html_tags > 0 and (html_tags * 10) / total_chars > 0.3:
+        return True
+    
+    # Check for specific patterns that indicate heavy HTML structure
+    heavy_html_patterns = [
+        r'<table[^>]*>.*?</table>',
+        r'<div[^>]*style="[^"]*margin:[^"]*padding:[^"]*"[^>]*>',
+        r'<td[^>]*style="[^"]*margin:[^"]*padding:[^"]*"[^>]*>',
+    ]
+    
+    pattern_matches = 0
+    for pattern in heavy_html_patterns:
+        matches = re.findall(pattern, content, re.DOTALL)
+        pattern_matches += len(matches)
+    
+    # If we find many table/div structures, it's heavily HTML
+    return pattern_matches > 10
+
+def clean_heavily_html_structured(content: str, frontmatter: Dict = None) -> str:
+    """Clean heavily HTML-structured content by extracting only meaningful text."""
+    import re
+    
+    # Extract frontmatter if present
+    frontmatter_text = ""
+    content_start = 0
+    
+    if content.startswith('---'):
+        end_marker = content.find('---', 3)
+        if end_marker != -1:
+            frontmatter_text = content[:end_marker + 3]
+            content_start = end_marker + 3
+    
+    # Remove all HTML tags and attributes
+    cleaned = re.sub(r'<[^>]+>', '', content[content_start:])
+    
+    # Decode HTML entities
+    cleaned = cleaned.replace('&amp;', '&')
+    cleaned = cleaned.replace('&nbsp;', ' ')
+    cleaned = cleaned.replace('&lt;', '<')
+    cleaned = cleaned.replace('&gt;', '>')
+    cleaned = cleaned.replace('&quot;', '"')
+    cleaned = cleaned.replace('&#39;', "'")
+    
+    # Remove excessive whitespace
+    cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)
+    
+    # Remove lines that are mostly whitespace or very short
+    lines = cleaned.split('\n')
+    meaningful_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if len(line) > 10 and not re.match(r'^[|\-\s]+$', line):
+            meaningful_lines.append(line)
+    
+    # If we have meaningful content, return it with frontmatter
+    if meaningful_lines:
+        result = frontmatter_text + '\n\n' + '\n'.join(meaningful_lines)
+        return result
+    else:
+        # If no meaningful content found, return a minimal note
+        return frontmatter_text + '\n\n# Content could not be extracted\n\nThis web clipping contained mostly HTML structure with little readable content.'
+
 def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     """Conservative web clipping cleaner that removes obvious boilerplate while preserving main content."""
     import re
+    
+    # Check if this is heavily HTML-structured content
+    if is_heavily_html_structured(content):
+        return clean_heavily_html_structured(content, frontmatter)
+    
+    # First, convert HTML tables to Markdown tables
+    content = convert_html_tables_to_markdown(content)
     
     # Split into lines for processing
     lines = content.split('\n')
@@ -279,6 +493,10 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
         frontmatter_text = '\n'.join(lines[:frontmatter_end+1])
         if 'source:' in frontmatter_text and 'http' in frontmatter_text:
             is_web_clipping = True
+    
+    # For web clippings, remove entire boilerplate sections
+    if is_web_clipping:
+        content_lines = remove_boilerplate_sections(content_lines)
     
     # Conservative patterns to remove - only very obvious boilerplate
     conservative_patterns = [
@@ -343,11 +561,87 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
         r'^\s*[Ff]ollow the authors.*',
         r'^\s*[Tt]ake a tour.*',
         r'^\s*[Ww]elcome to the New.*',
+        
+        # Advertisement and promotional content
+        r'^\s*[Aa]dvertisement.*',
+        r'^\s*[Ss]ponsored.*',
+        r'^\s*[Pp]romoted.*',
+        r'^\s*[Aa]d\s*$',
+        
+        # Social media and sharing
+        r'^\s*[Ss]hare.*',
+        r'^\s*[Ff]ollow.*',
+        r'^\s*[Ff]ollow [Uu]s.*',
+        r'^\s*[Ll]ike.*',
+        r'^\s*[Tt]weet.*',
+        r'^\s*[Ss]ubscribe.*',
+        r'^\s*[Mm]y [Ss]ubscription.*',
+        
+        # Navigation and menus
+        r'^\s*\*?\s*\[.*[Mm]enu.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Hh]ome.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Bb]usiness.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Nn]ational.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Ww]orld.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Ss]ports.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Ll]ife.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Vv]iews.*\]\(http[^)]+\)\s*$',
+        r'^\s*\*?\s*\[.*[Ee]ditor.*[Cc]hoice.*\]\(http[^)]+\)\s*$',
+        
+        # Footer and copyright content
+        r'^\s*[Cc]opyright.*',
+        r'^\s*©.*',
+        r'^\s*[Aa]ll rights reserved.*',
+        r'^\s*[Pp]artners?:.*',
+        r'^\s*[Ff]rom [Oo]ur [Nn]etworks.*',
+        r'^\s*[Mm]ost [Vv]iewed.*',
+        r'^\s*[Mm]ost [Cc]ommented.*',
+        r'^\s*[Tt]op [Gg]ainer.*',
+        r'^\s*[Tt]op [Ll]oser.*',
+        
+        # Stock market data and tables
+        r'^\s*[A-Z]{3,4}\s+.*\s+\d+.*\s*[+-]?\d+\.?\d*%?\s*$',
+        r'^\s*[Pp]rice\s*$',
+        r'^\s*%?\s*[Cc]hange\s*$',
+        r'^\s*[Ss]tock [Ee]xchange.*',
+        
+        # Job listings and classifieds
+        r'^\s*[Jj]ob.*',
+        r'^\s*[Cc]areer.*',
+        r'^\s*[Cc]lassified.*',
+        r'^\s*[Ll]ook for more jobs.*',
+        
+        # Related articles and recommendations
+        r'^\s*[Rr]ead also:.*',
+        r'^\s*[Rr]elated.*',
+        r'^\s*[Mm]ore from.*',
+        r'^\s*[Ll]atest.*',
+        r'^\s*[Rr]ecommended.*',
         r'^\s*[Vv]iew tips.*',
         r'^\s*[Gg]ive feedback.*',
         r'^\s*[Ss]upport.*',
         r'^\s*[Ll]egal & Privacy.*',
         r'^\s*[Ss]ervices.*',
+        
+        # Social media and sharing sections
+        r'^\s*#\s*[Ss]ocial [Mm]edia.*',
+        r'^\s*[Mm]ore [Ss]haring.*',
+        r'^\s*[Ss]hare.*[Ss]ervices.*',
+        r'^\s*[Ss]haring [Tt]ools.*',
+        
+        # Duplicate URLs and tracking parameters
+        r'^<http[^>]*utm_[^>]*>$',
+        r'^<http[^>]*\?utm_[^>]*>$',
+        r'^\s*<http[^>]*#><http[^>]*#><http[^>]*#>\s*$',
+        
+        # Social media icon links
+        r'^\s*\*\s*\[\[#\|.*\]\]\s*$',
+        r'^\s*\*\s*\[\[#\|!\[.*\]\(http[^)]+\)\]\]\s*$',
+        
+        # Section separators and empty content
+        r'^\s*###\s*$',
+        r'^\s*---+\s*$',
+        r'^\s*\*\*\*\s*$',
         r'^\s*[Tt]ools.*',
         r'^\s*[Mm]ore from the FT Group.*',
         r'^\s*[Mm]arkets data delayed.*',
@@ -406,7 +700,7 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
             obvious_boilerplate = [
                 r'^\s*\|.*\|\s*$',  # Table rows with just separators
                 r'^\s*\.\s*$',  # Just a dot
-                r'^\s*[|-\s]+\s*$',  # Separator lines
+                r'^\s*[|\-\s]+\s*$',  # Separator lines
             ]
             for pattern in obvious_boilerplate:
                 if re.match(pattern, line_stripped):

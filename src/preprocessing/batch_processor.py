@@ -229,7 +229,12 @@ class BatchProcessor:
             if standardized_metadata != original_frontmatter:
                 result['changes_made'].append('metadata_standardized')
             
-            # Stage 5: Content Processing based on classification
+            # Stage 5: HTML Table Conversion (for all notes)
+            result['stages_completed'].append('html_table_conversion')
+            from src.preprocessing.web_clipping_cleaner import convert_html_tables_to_markdown
+            content = convert_html_tables_to_markdown(content)
+            
+            # Stage 6: Content Processing based on classification
             result['stages_completed'].append('content_processing')
             original_content = content
             processed_content = content
@@ -502,7 +507,15 @@ class BatchProcessor:
     
     def process_sample(self, sample_size: int = 10, dry_run: bool = True) -> Dict:
         """Process a small sample for testing."""
-        files = list(self.vault_path.rglob("*.md"))[:sample_size]
+        import random
+        
+        all_files = list(self.vault_path.rglob("*.md"))
+        if len(all_files) <= sample_size:
+            files = all_files
+            print(f"Warning: Only {len(all_files)} files available, processing all of them")
+        else:
+            files = random.sample(all_files, sample_size)
+            print(f"Randomly sampled {sample_size} files from {len(all_files)} available")
         
         print(f"Processing sample of {len(files)} files (dry_run={dry_run})")
         
