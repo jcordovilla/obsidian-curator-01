@@ -15,9 +15,19 @@ import config
 from src.preprocessing import BatchProcessor
 from src.curation.obsidian_curator.main import run
 
-def test_complete_pipeline():
-    """Test the complete pipeline: raw -> preprocessed -> curated."""
-    print("Testing complete Obsidian Curator pipeline...")
+def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
+    """Test the complete pipeline: raw -> preprocessed -> curated.
+    
+    Args:
+        num_notes: Number of notes to test
+        preserve_previous: If True, move previous results to dated backup folder
+        seed: Optional random seed for reproducible results
+    """
+    print(f"Testing complete Obsidian Curator pipeline with {num_notes} notes...")
+    if seed is not None:
+        print(f"Using random seed: {seed}")
+    if preserve_previous:
+        print("Previous results will be preserved in dated folders")
     print("=" * 60)
     
     # Get test configuration
@@ -33,27 +43,52 @@ def test_complete_pipeline():
     print(f"Curated vault: {curated_vault}")
     print()
     
-    # Step 0: Randomly select and copy 50 fresh notes from real vault
-    print("Step 0: Randomly selecting 50 fresh notes from real vault...")
+    # Step 0: Randomly select and copy notes from real vault
+    print(f"Step 0: Randomly selecting {num_notes} fresh notes from real vault...")
     print("-" * 40)
     
     import random
     import shutil
+    from datetime import datetime
     
-    # Clean test folders first
-    if os.path.exists(preprocessed_vault):
-        shutil.rmtree(preprocessed_vault)
-        print(f"✓ Cleaned preprocessed vault: {preprocessed_vault}")
+    # Set random seed if provided for reproducible results
+    if seed is not None:
+        random.seed(seed)
+        print(f"✓ Set random seed to {seed} for reproducible results")
     
-    if os.path.exists(curated_vault):
-        shutil.rmtree(curated_vault)
-        print(f"✓ Cleaned curated vault: {curated_vault}")
-    
-    # Clean and recreate raw test folder
+    # Get test raw vault path
     test_raw_vault = test_cfg['paths']['test_raw_vault']
-    if os.path.exists(test_raw_vault):
-        shutil.rmtree(test_raw_vault)
-        print(f"✓ Cleaned raw test vault: {test_raw_vault}")
+    
+    # Preserve previous results if requested
+    if preserve_previous:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_base = "tests/test_data/archive"
+        
+        # Create archive directory
+        os.makedirs(backup_base, exist_ok=True)
+        
+        # Move existing results to timestamped backup
+        for vault_name, vault_path in [("raw", test_raw_vault), 
+                                      ("preprocessed", preprocessed_vault),
+                                      ("curated", curated_vault)]:
+            if os.path.exists(vault_path):
+                backup_path = f"{backup_base}/{timestamp}_{vault_name}"
+                shutil.move(vault_path, backup_path)
+                print(f"✓ Archived {vault_name} vault: {backup_path}")
+    else:
+        # Clean test folders (original behavior)
+        if os.path.exists(preprocessed_vault):
+            shutil.rmtree(preprocessed_vault)
+            print(f"✓ Cleaned preprocessed vault: {preprocessed_vault}")
+        
+        if os.path.exists(curated_vault):
+            shutil.rmtree(curated_vault)
+            print(f"✓ Cleaned curated vault: {curated_vault}")
+        
+        # Clean and recreate raw test folder
+        if os.path.exists(test_raw_vault):
+            shutil.rmtree(test_raw_vault)
+            print(f"✓ Cleaned raw test vault: {test_raw_vault}")
     
     # Recreate test folders
     os.makedirs(test_raw_vault, exist_ok=True)
@@ -65,6 +100,26 @@ def test_complete_pipeline():
     # Get all notes from real vault
     all_notes = list(Path(raw_vault).rglob("*.md"))
     print(f"Found {len(all_notes)} notes in real vault")
+    
+    # For incremental testing, exclude already tested notes
+    excluded_notes = set()
+    if preserve_previous and os.path.exists("tests/test_data/archive"):
+        # Get list of previously tested notes from all archives
+        for archive_dir in os.listdir("tests/test_data/archive"):
+            archive_path = f"tests/test_data/archive/{archive_dir}"
+            if os.path.isdir(archive_path) and archive_dir.endswith("_raw"):
+                raw_archive = f"{archive_path}/notes"
+                if os.path.exists(raw_archive):
+                    for note_file in os.listdir(raw_archive):
+                        if note_file.startswith("test_note_") and note_file.endswith(".md"):
+                            # Extract original note name
+                            original_name = note_file.replace("test_note_", "").split("_", 1)[1]
+                            excluded_notes.add(original_name)
+        
+        if excluded_notes:
+            print(f"📋 Incremental mode: Excluding {len(excluded_notes)} previously tested notes")
+            all_notes = [note for note in all_notes if note.name not in excluded_notes]
+            print(f"📋 Available for testing: {len(all_notes)} new notes")
     
     # Find notes with attachments first
     notes_with_attachments = []
@@ -81,9 +136,12 @@ def test_complete_pipeline():
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # Select a mix: 10 with attachments, 40 without
-    selected_with_attachments = random.sample(notes_with_attachments, min(10, len(notes_with_attachments)))
-    selected_without_attachments = random.sample(notes_without_attachments, 40)
+    # Select a mix: prioritize notes with attachments, then fill with notes without
+    num_with_attachments = min(num_notes, len(notes_with_attachments))
+    num_without_attachments = min(num_notes - num_with_attachments, len(notes_without_attachments))
+    
+    selected_with_attachments = random.sample(notes_with_attachments, num_with_attachments)
+    selected_without_attachments = random.sample(notes_without_attachments, num_without_attachments)
     selected_notes = selected_with_attachments + selected_without_attachments
     
     print(f"Selected {len(selected_with_attachments)} notes with attachments")
@@ -163,7 +221,7 @@ def test_complete_pipeline():
             if not found_attachments:
                 print(f"    + attachments: none found")
     
-    print(f"✓ Copied 50 fresh notes to test folder")
+    print(f"✓ Copied {len(selected_notes)} fresh notes to test folder")
     print()
     
     # Update raw_vault to use test folder for preprocessing
@@ -191,8 +249,8 @@ def test_complete_pipeline():
     )
     
     try:
-        # Process all 50 notes (they're already selected and copied)
-        print("Processing all 50 selected notes...")
+        # Process all selected notes (they're already selected and copied)
+        print(f"Processing all {len(selected_notes)} selected notes...")
         results = processor.process_vault()
         
         print(f"Preprocessing results:")
@@ -246,11 +304,48 @@ def test_complete_pipeline():
     
     print("\n✓ Complete pipeline test successful!")
     print("  Raw notes -> Preprocessed notes -> Curated notes")
+    
+    # Show archive information if preserving
+    if preserve_previous and os.path.exists("tests/test_data/archive"):
+        archives = [d for d in os.listdir("tests/test_data/archive") if d.endswith("_curated")]
+        if archives:
+            print(f"\n📁 Previous results preserved in tests/test_data/archive/")
+            print(f"   {len(archives)} test runs archived")
+            latest = max(archives)
+            print(f"   Latest: {latest}")
+    
     return True
 
 def main():
     """Run the complete pipeline test."""
-    success = test_complete_pipeline()
+    import sys
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Test the complete Obsidian Curator pipeline')
+    parser.add_argument('num_notes', type=int, nargs='?', default=10, 
+                       help='Number of notes to test (default: 10)')
+    parser.add_argument('--seed', type=int, 
+                       help='Random seed for reproducible results')
+    parser.add_argument('--no-preserve', action='store_true', 
+                       help='Don\'t preserve previous results (delete them)')
+    parser.add_argument('--incremental', action='store_true',
+                       help='Incremental mode: only test new notes, keep existing triage')
+    
+    # Handle both old-style (positional) and new-style (argparse) arguments
+    if len(sys.argv) == 2 and sys.argv[1].isdigit():
+        # Old style: just number of notes
+        args = parser.parse_args([sys.argv[1]])
+    else:
+        args = parser.parse_args()
+    
+    preserve_previous = not args.no_preserve
+    
+    if args.incremental:
+        print("🔄 Incremental mode: Testing new notes while preserving triage decisions")
+        preserve_previous = True  # Force preservation in incremental mode
+    
+    success = test_complete_pipeline(args.num_notes, preserve_previous, args.seed)
     
     if success:
         print("\n🎉 Complete pipeline test passed!")

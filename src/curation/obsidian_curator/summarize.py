@@ -28,13 +28,26 @@ CATEGORIES: {categories}
 PAGES: {pages}
 EXTRACT: {text}
 
-Produce exactly the following sections:
-1) PROFESSIONAL ABSTRACT (120-150 words): Concise, factual summary emphasizing the document's technical/financial/governance contributions, methods, and main conclusions. Use neutral, professional language.
-2) KEY FINDINGS (8 bullets): Each bullet a single sentence with the strongest claims, data points or methodological notes. When possible, append a page hint like (p.3). Be specific (e.g., metrics, cost estimates, models used).
-3) QUOTABLES (2 short quotes <= 30 words each): Extract verbatim sentences or fragments clearly identified with page refs.
-4) WHY IT MATTERS (one short paragraph <= 60 words): Practical implications for infrastructure investment, PPPs or digital transformation and a note on confidence (high/medium/low) based on evidence in the text.
+Produce exactly the following sections with STRICT word limits:
 
-Tone: conservative, evidence-first. Do not invent data. If evidence is absent for a claim, flag it as "unsupported"."""
+**PROFESSIONAL ABSTRACT**
+Write exactly 120-150 words. Concise, factual summary emphasizing the document's technical/financial/governance contributions, methods, and main conclusions. Use neutral, professional language.
+
+**KEY FINDINGS**
+• List exactly 8 bullet points
+• Each bullet: one sentence with strongest claims, data points or methodological notes
+• When possible, append page hint like (p.3)
+• Be specific (e.g., metrics, cost estimates, models used)
+
+**QUOTABLES**
+* Quote 1: "[verbatim text]" (p.X)
+* Quote 2: "[verbatim text]" (p.X)
+Each quote must be ≤30 words and include page reference.
+
+**WHY IT MATTERS**
+Write exactly 50-80 words: Practical implications for infrastructure investment, PPPs or digital transformation and confidence level (high/medium/low) based on evidence quality.
+
+CRITICAL: Follow the exact format above. Do not exceed word limits. Do not invent data. If evidence is absent, flag as "unsupported"."""
 
         return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900, temp=0.2)
         

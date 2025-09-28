@@ -51,7 +51,7 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             meta, body = parse_front_matter(note_path)
             assets = detect_assets(body, attachments)
             primary = choose_primary(assets, body, cfg['priorities'])
-            content = extract_content(primary, assets, body, meta.get('language'), attachments)
+            content = extract_content(primary, assets, body, meta.get('language'), attachments, note_path)
             
             # Early classification to get relevance score for better filtering
             cats, tags, ents = classify_json(content, meta, cfg)
@@ -68,6 +68,12 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             if decision == 'triage':
                 if not dry_run:
                     enqueue_triage(note_path, feats, score)
+                    # Copy triaged notes to triage folder for manual review
+                    import shutil
+                    triage_dir = cfg['paths']['out_notes'].replace('/notes', '/triage')
+                    os.makedirs(triage_dir, exist_ok=True)
+                    triage_path = os.path.join(triage_dir, os.path.basename(note_path))
+                    shutil.copy2(note_path, triage_path)
                 logger.info(f'TRIAGE: {note_path} (score={score:.3f})'); continue
             if decision == 'discard':
                 logger.info(f'DISCARD: {note_path} (score={score:.3f})'); continue

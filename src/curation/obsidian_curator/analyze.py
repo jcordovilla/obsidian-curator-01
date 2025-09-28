@@ -6,24 +6,58 @@ def calculate_content_richness(text, title, meta):
     # Basic length-based richness
     length_richness = min(1.0, math.log1p(len(text))/8.0)
     
-    # Check for business card patterns
-    business_card_indicators = [
-        'tarjeta de visita', 'business card', 'contact', 'email', 'phone', 'teléfono',
-        'director', 'comercial', 'manager', 'ceo', 'cto', 'cfo'
-    ]
-    
     title_lower = title.lower()
     text_lower = text.lower()
     
-    # If it looks like a business card, cap the richness
-    if any(indicator in title_lower or indicator in text_lower for indicator in business_card_indicators):
-        # Business cards should have low richness regardless of length
-        return min(0.3, length_richness)
+    # Check for low-value content types that should be heavily penalized
+    low_value_indicators = [
+        # Screenshots and images without content
+        'snapshot', 'captura', 'screenshot', 'image', 'picture',
+        # Business cards and contact info
+        'tarjeta de visita', 'business card', 'contact', 'email', 'phone', 'teléfono',
+        'director', 'comercial', 'manager', 'ceo', 'cto', 'cfo',
+        # Bills and invoices
+        'bill', 'invoice', 'factura', 'movistar', 'adsl',
+        # Simple lists without analysis
+        'clientes', 'customers', 'companies', 'empresas',
+        # Software documentation and tools
+        'waternetgen', 'software', 'extension', 'epanet', 'tool', 'utility', 'manual', 'documentation',
+        'download', 'version', 'exe', 'zip', 'install', 'setup', 'tutorial',
+        # Company websites and marketing
+        'website', 'homepage', 'navigation', 'menu', 'footer', 'header',
+        'about us', 'contact us', 'get in touch', 'our team', 'office locations',
+        # Personal content
+        'audio', 'video', 'reminder', 'todo', 'task', 'personal', 'wallet', 'recovery'
+    ]
     
-    # Check for other low-value content types
-    if 'email' in text_lower and 'phone' in text_lower and len(text) < 500:
-        # Looks like contact information
-        return min(0.4, length_richness)
+    # If it looks like low-value content, heavily penalize
+    if any(indicator in title_lower or indicator in text_lower for indicator in low_value_indicators):
+        # Low-value content should have very low richness
+        return min(0.1, length_richness * 0.1)
+    
+    # Check for content that's just lists or names without analysis
+    if len(text) < 200 and (text.count('\n- ') > 5 or text.count('\n* ') > 5):
+        # Just a list without substantial content
+        return min(0.3, length_richness * 0.5)
+    
+    # Check for content that's mostly boilerplate or navigation
+    if text.count('http://') > 10 and len(text) < 1000:
+        # Too many links, likely navigation/boilerplate
+        return min(0.4, length_richness * 0.6)
+    
+    # Check for website navigation patterns
+    nav_patterns = ['skip to main content', 'footer', 'header', 'navigation', 'menu',
+                   'get in touch', 'contact us', 'about us', 'our team', 'office locations',
+                   'read more', 'click here', 'learn more']
+    nav_count = sum(1 for pattern in nav_patterns if pattern in text_lower)
+    if nav_count > 3 and len(text) < 2000:
+        # Likely website navigation content
+        return min(0.3, length_richness * 0.4)
+    
+    # Check for content that's mostly just images
+    if text.count('![') > 2 and len(text) < 300:
+        # Mostly images, likely low-value
+        return min(0.2, length_richness * 0.3)
     
     # Check for structured content (sections, lists, etc.)
     structure_score = 0
@@ -33,6 +67,16 @@ def calculate_content_richness(text, title, meta):
         structure_score += 0.2
     if text.count('\n\n') > 2:  # Has paragraphs
         structure_score += 0.1
+    
+    # Check for professional content indicators
+    professional_indicators = [
+        'analysis', 'report', 'study', 'research', 'project', 'investment',
+        'infrastructure', 'finance', 'governance', 'risk', 'management',
+        'technology', 'development', 'strategy', 'policy', 'regulation'
+    ]
+    
+    if any(indicator in text_lower for indicator in professional_indicators):
+        structure_score += 0.2
     
     # Combine length and structure
     final_richness = min(1.0, length_richness + structure_score)
@@ -60,7 +104,18 @@ def get_llm_relevance_score(text, title, cfg):
     - LOW RELEVANCE (0.2-0.4): General business content, social media marketing, personal productivity
     - IRRELEVANT (0.0-0.1): Personal documents, bills, casual notes, unrelated content
 
-    PROFESSIONAL CONTEXT: This professional needs knowledge across financing methods, emerging technologies, governance practices, and risk management to inform infrastructure investment decisions. Content that provides professional knowledge applicable to infrastructure work should be rated highly, even if not directly about infrastructure projects.
+    CRITICAL EXCLUSIONS - Rate as IRRELEVANT (0.0-0.1):
+    - Software documentation, user manuals, technical tutorials (unless about infrastructure-specific tools)
+    - Company websites, marketing materials, navigation pages
+    - Personal notes, reminders, to-do lists
+    - News headlines without analysis or insights
+    - Generic business advice not specific to infrastructure
+    - Screenshots or images without substantive professional content
+    - Audio/video files without transcripts or descriptions
+
+    PROFESSIONAL CONTEXT: This professional needs knowledge across financing methods, emerging technologies, governance practices, and risk management to inform infrastructure investment decisions. Content must provide actionable professional knowledge, not just mention infrastructure topics.
+
+    IMPORTANT: Be conservative. If content appears to be documentation, tutorials, basic news, or company marketing rather than professional analysis or insights, rate relevance as LOW (0.2) or IRRELEVANT (0.0-0.1).
 
     Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "novelty": 0.xx, "reasoning": "brief explanation"}}"""
 

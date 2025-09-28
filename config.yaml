@@ -1,6 +1,6 @@
 decision:
-  gray_margin: 0.1
-  keep_threshold: 0.5
+  gray_margin: 0.15
+  keep_threshold: 0.58
 language:
   default: auto
 models:

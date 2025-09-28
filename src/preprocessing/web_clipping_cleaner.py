@@ -413,7 +413,7 @@ def remove_boilerplate_sections(content_lines: List[str]) -> List[str]:
                 i += 1
                 continue
         
-        cleaned_lines.append(line)
+                cleaned_lines.append(line)
         i += 1
     
     return cleaned_lines
@@ -714,6 +714,37 @@ def apply_enhanced_cleaning(content: str) -> str:
         r'^\s*#\s*[Cc]lassified.*[Aa]ds\s*$',
         r'^\s*#\s*[Kk]eep.*[Uu]pdated\s*$',
         
+        # Dots and strange characters
+        r'^\.\s*\.\s*\.\s*\.+$',
+        r'^\.\s*\.\s*\.\s*\.\s*\.\s*\.\s*\.+$',
+        r'^\.{10,}$',
+        
+        # Ad server HTML
+        r'^<http://adserver\.adtech\.de/.*>$',
+        r'^\[http://adserver\.adtech\.de/.*\]\(.*\)$',
+        r'^<a href="http://adserver\.adtech\.de/.*".*$',
+        r'^<img.*adserver\.adtech\.de.*>$',
+        
+        # Navigation breadcrumbs
+        r'^\[.*\]\(http://.*\)\s*>\s*$',
+        r'^\[.*\]\(http://.*\)\s*>\s*\[.*\]\(http://.*\)\s*>\s*$',
+        
+        # Empty table structures
+        r'^\|\s*\|\s*\|\s*$',
+        r'^\|\s*:---:\s*\|\s*:---:\s*\|\s*:---:\s*\|\s*$',
+        r'^\|\s*---\s*\|\s*:---\s*\|\s*---\s*\|\s*$',
+        
+        # Footer contact information
+        r'^\* Main Office\s*$',
+        r'^\* Recharge AS\s*$',
+        r'^\* Christian Kroghs gt\.\s*$',
+        r'^\* NO-0186 Oslo\s*$',
+        r'^\* Local Offices\s*$',
+        r'^\* Publisher:\s*$',
+        r'^\* Editor-in-Chief:\s*$',
+        r'^\* Managing Director:\s*$',
+        r'^\* Online news editor:\s*$',
+        
         # Navigation menu items
         r'^\s*\*\s*\[.*[Ll]atest.*[Uu]pdates.*\]\([^)]+\)\s*$',
         r'^\s*\*\s*\[.*[Ll]eaders.*\]\([^)]+\)\s*$',
@@ -857,25 +888,25 @@ def apply_enhanced_cleaning(content: str) -> str:
             continue
         
         # Check against enhanced patterns
-        should_remove = False
-        for pattern in compiled_patterns:
-            if pattern.match(line_stripped):
-                should_remove = True
-                break
-        
+            should_remove = False
+            for pattern in compiled_patterns:
+                if pattern.match(line_stripped):
+                    should_remove = True
+                    break
+            
         # Additional checks for link-heavy lines
-        if not should_remove:
-            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
-            word_count = len(line_stripped.split())
+            if not should_remove:
+                link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+                word_count = len(line_stripped.split())
             if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
                 nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe', 'latest', 'leaders', 'briefing', 'united', 'states', 'americas', 'asia', 'china', 'europe', 'britain', 'international', 'business', 'finance', 'economics', 'science', 'technology', 'books', 'arts', 'obituary', 'special', 'reports', 'technology', 'quarterly', 'debates']
                 nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
                 if nav_count > 0:
                     should_remove = True
-        
-        # Keep the line if it doesn't match removal patterns
-        if not should_remove:
-            cleaned_lines.append(line)
+            
+            # Keep the line if it doesn't match removal patterns
+            if not should_remove:
+                cleaned_lines.append(line)
     
     # Join and clean up
     cleaned_content = '\n'.join(cleaned_lines)

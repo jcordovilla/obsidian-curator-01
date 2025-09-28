@@ -15,8 +15,20 @@ def write_curated_note(note_path, meta, cats, tags, ents, summary, content, scor
     fm.append(f'usefulness: {score:.3f}')
     fm.append("---")
     body = f"## Curator Summary\n\n{summary}\n\n---\n\n"
-    text = content.get('text','')
-    body += text
+    
+    # For PDFs, add attachment reference instead of full text
+    if content.get('kind') == 'pdf':
+        # Add reference to original PDF attachment
+        note_stem = pathlib.Path(note_path).stem
+        body += f"**Source Document**: See attached PDF: `{note_stem}.pdf`\n\n"
+        body += f"**Pages**: {content.get('pages', 'Unknown')} pages\n\n"
+        body += "**Note**: Full PDF content available in attachments folder.\n"
+    else:
+        # For non-PDF content, include the text (but limit length)
+        text = content.get('text','')
+        if len(text) > 2000:  # Limit to 2000 characters for readability
+            text = text[:2000] + "\n\n[Content truncated for readability...]"
+        body += text
     os.makedirs(out_notes, exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
-        f.write("\\n".join(fm) + "\\n" + body)
+        f.write("\n".join(fm) + "\n" + body)
