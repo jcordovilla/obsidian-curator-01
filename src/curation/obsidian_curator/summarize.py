@@ -1,17 +1,32 @@
 from .llm import chat_text
 
-SUM_SYS = """You produce conservative, professional summaries for a Chartered Civil Engineer specializing in infrastructure investment, digital transformation and PPPs. Require concrete substance (data, methods, frameworks, case evidence, legislation, contracts). Avoid keyword-only matches. Write for senior practitioners: clear, factual, and citation-aware when possible. 
+# Import unified professional context
+from .classify import PROFESSIONAL_CONTEXT
 
-Global expectations:
-- Tone: professional, concise, and factual for senior practitioners.
-- Evidence rules: if a claim is not directly supported by the provided text, label it as 'unsupported' rather than asserting it.
-- Citation: when the input includes page or section markers, preserve them in summaries (e.g., "(p.3)"). When no page markers exist, do not invent them.
-- Output discipline: obey the user prompt format exactly (headings, bullets, counts). If unable to comply (e.g., insufficient text), return a short, explicit diagnostic (e.g., "insufficient substance: only links/filenames").
-- Data handling: extract and surface numeric estimates, modelling approaches, and key assumptions when present; flag estimates lacking context.
-- Confidentiality & safety: do not expose or invent personal contact details or private credentials.
-- Language & style: use neutral language, avoid superlatives unless supported; keep single-paragraph abstracts at the requested length.
+SUM_SYS = f"""{PROFESSIONAL_CONTEXT}
 
-Do not fabricate missing data. If the user requests an output structure you cannot fill due to missing evidence, return the structure with placeholders and short notes explaining what's missing."""
+SUMMARIZATION ROLE: You create professional summaries STRICTLY based on provided source material.
+
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, elaborate, or create content not explicitly present in the source
+- NEVER reference external sources, studies, organizations, or data not mentioned in the provided text
+- NEVER add professional context, background, or interpretation beyond what is stated
+- If source material is insufficient, incomplete, or unclear, state this honestly
+- Every claim must be directly traceable to the provided text
+
+SUMMARY PRINCIPLES:
+- EVIDENCE: Only surface claims explicitly stated in the provided text
+- CITATIONS: Use page references ONLY if present in the source text
+- FORMAT: If insufficient content exists for requested format, provide diagnostic explanation
+- TONE: Professional, factual, but strictly limited to source content
+- DATA: Extract ONLY numeric estimates and methodologies explicitly mentioned in source
+- ATTRIBUTION: Never invent source attribution not present in the text
+
+INTEGRITY OVER FORMAT:
+- Honest assessment of insufficient content is preferable to fabricated summaries
+- If source lacks professional substance, state this directly
+- Do not force professional interpretation onto minimal or unclear content
+- Accuracy and truthfulness are more important than completing requested format"""
 
 def summarize_content(content, meta, cats, cfg):
     kind = content.get('kind', 'text')
@@ -20,42 +35,66 @@ def summarize_content(content, meta, cats, cfg):
     text = content.get('text', '') or ""
     pages = content.get('pages', None)
     
+    # Extract provenance metadata for better summarization
+    source = meta.get('source', '')
+    date_created = meta.get('date created', '')
+    date_modified = meta.get('date modified', '')
+    language = meta.get('language', 'en')
+    
+    # Fabrication prevention: Check for insufficient content
+    if len(text.strip()) < 50:
+        return f"**INSUFFICIENT CONTENT FOR PROFESSIONAL SUMMARY**\n\nSource contains insufficient material for professional analysis.\n\n**Available content**: {text.strip()[:200] if text.strip() else 'No readable text found'}\n\n**Assessment**: This note lacks the substantive content required for professional publication use."
+    
     if kind=='pdf':
-        prompt = f"""Summarize this PDF for a senior infrastructure consultant. Be conservative: only surface claims supported by text. If page numbers can be identified, tag items with (p.X).
+        prompt = f"""CRITICAL ANTI-FABRICATION INSTRUCTIONS:
+- ONLY use information explicitly present in the provided text extract
+- DO NOT invent, elaborate, or create any content not directly stated in the source
+- If the extract lacks sufficient detail for any section, state "Information not available in extract"
+- NEVER cite sources, studies, or data not mentioned in the provided text
+- If page references cannot be identified from the extract, do not include them
 
-TITLE: {title}
-CATEGORIES: {categories}
-PAGES: {pages}
-EXTRACT: {text}
+DOCUMENT DETAILS:
+Title: {title}
+Source: {source if source else 'Not specified'}
+Created: {date_created if date_created else 'Not specified'}
+Modified: {date_modified if date_modified else 'Not specified'}
+Language: {language}
+Categories: {categories}
+Pages: {pages}
+TEXT EXTRACT TO ANALYZE: {text}
 
-Produce exactly the following sections with STRICT word limits:
+CREATE SUMMARY ONLY FROM THE ABOVE TEXT EXTRACT:
 
-**PROFESSIONAL ABSTRACT**
-Write exactly 120-150 words. Concise, factual summary emphasizing the document's technical/financial/governance contributions, methods, and main conclusions. Use neutral, professional language.
+**PUBLICATION ABSTRACT** (150-200 words)
+Summarize ONLY what is explicitly stated in the text extract above. If the extract is incomplete or unclear, state this limitation.
 
-**KEY FINDINGS**
-• List exactly 8 bullet points
-• Each bullet: one sentence with strongest claims, data points or methodological notes
-• When possible, append page hint like (p.3)
-• Be specific (e.g., metrics, cost estimates, models used)
+**TECHNICAL CONTRIBUTIONS** (up to 8 points)
+• List ONLY technical points explicitly mentioned in the text extract
+• Use page references ONLY if clearly indicated in the extract
+• If fewer than 8 points are available in the extract, provide only what exists
 
-**QUOTABLES**
-* Quote 1: "[verbatim text]" (p.X)
-* Quote 2: "[verbatim text]" (p.X)
-Each quote must be ≤30 words and include page reference.
+**CITATION-READY EXCERPTS**
+* Quote ONLY verbatim text from the extract above
+* Include page references ONLY if present in the extract
+* If no suitable quotes exist in the extract, state "No quotable excerpts available in extract"
 
-**WHY IT MATTERS**
-Write exactly 50-80 words: Practical implications for infrastructure investment, PPPs or digital transformation and confidence level (high/medium/low) based on evidence quality.
+**RESEARCH APPLICATIONS** (80-120 words)
+Assess value based ONLY on what is described in the text extract. If the extract is insufficient to make assessments, state this clearly.
 
-CRITICAL: Follow the exact format above. Do not exceed word limits. Do not invent data. If evidence is absent, flag as "unsupported"."""
+FINAL CHECK: Ensure every claim in your summary can be traced directly to the provided text extract. Do not add context, background, or elaboration not present in the source."""
 
         return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900, temp=0.2)
         
     if kind=='image':
         prompt = f"""Summarize this image and any OCR'd text for an infrastructure expert. Be precise and avoid speculation.
 
-TITLE: {title}
-CATEGORIES: {categories}
+IMAGE DETAILS:
+Title: {title}
+Source: {source if source else 'Not specified'}
+Created: {date_created if date_created else 'Not specified'}
+Modified: {date_modified if date_modified else 'Not specified'}
+Language: {language}
+Categories: {categories}
 OCR_TEXT: {text}
 
 Provide:
@@ -69,17 +108,35 @@ Do not invent contextual history or attribution. If OCR is empty, clearly state 
         return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=500, temp=0.2)
         
     # Text content
-    prompt = f"""Summarize this text note for a senior infrastructure practitioner. Be conservative: emphasise methods, data, technical detail and implications.
+    prompt = f"""CRITICAL ANTI-FABRICATION INSTRUCTIONS:
+- ONLY summarize content explicitly present in the provided text
+- DO NOT invent, elaborate, add context, or create information not in the source
+- If the text lacks substance for any section, state "Insufficient information in source"
+- NEVER reference external sources, studies, or data not mentioned in the text
+- Do not assume professional context unless explicitly stated in the content
 
-TITLE: {title}
-CATEGORIES: {categories}
-CONTENT: {text}
+DOCUMENT DETAILS:
+Title: {title}
+Source: {source if source else 'Not specified'}
+Created: {date_created if date_created else 'Not specified'}
+Modified: {date_modified if date_modified else 'Not specified'}
+Language: {language}
+Categories: {categories}
+ACTUAL CONTENT TO ANALYZE: {text}
 
-Output exactly:
-1) PROFESSIONAL SUMMARY (80-120 words): Key technical/financial/governance insights, methods used, and main takeaways.
-2) KEY POINTS (3-4 bullets): Specific actionable details or evidence (numbers, frameworks, named models).
-3) RELEVANCE (1 sentence): State which canonical category is satisfied (Finance & Economics | Policy & Governance | Risk & Sustainability | Technology & Innovation | Knowledge & Professional Practice) and why, referencing concrete text.
+ANALYZE ONLY THE ABOVE CONTENT:
 
-Constraints: If the content lacks technical substance (e.g., <100 words, only links or placeholders), state that explicitly and keep relevance low. Avoid speculation and do not invent facts."""
+**PUBLICATION SUMMARY** (100-150 words)
+Describe ONLY what is explicitly present in the provided content. If the content is minimal, brief, or unclear, state this honestly.
+
+**TECHNICAL HIGHLIGHTS** (as many as actually exist)
+• List ONLY technical points explicitly mentioned in the content
+• Do not invent methodologies, frameworks, or data not present
+• If no technical highlights exist in the content, state "No technical content available"
+
+**RESEARCH VALUE** (60-80 words)
+Assess based ONLY on what is actually described in the content. If the content lacks professional substance or is unclear, state this directly.
+
+VERIFICATION REQUIREMENT: Every statement in your summary must be directly traceable to the provided content. Do not add professional interpretation, context, or elaboration beyond what is explicitly stated."""
     
     return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=400, temp=0.2)

@@ -223,7 +223,7 @@ class BatchProcessor:
             result['stages_completed'].append('metadata_standardization')
             original_frontmatter = frontmatter.copy()
             standardized_metadata = self.metadata_standardizer.standardize_metadata(
-                frontmatter, file_path.name
+                frontmatter, file_path.name, str(file_path)
             )
             
             if standardized_metadata != original_frontmatter:
@@ -330,20 +330,26 @@ class BatchProcessor:
         return cleaned
     
     def _clean_personal_note(self, content: str) -> str:
-        """Gentle formatting cleanup for personal notes."""
-        # Clean up whitespace but preserve structure
+        """Gentle formatting cleanup for personal notes that preserves intentional structure."""
         lines = content.split('\n')
         cleaned_lines = []
         
         for line in lines:
-            # Clean up line but preserve intentional formatting
-            cleaned_line = re.sub(r'\s+', ' ', line).strip()
-            cleaned_lines.append(cleaned_line)
+            # Preserve leading whitespace for indentation-sensitive structures
+            if line.strip():  # Non-empty line
+                # Only clean internal whitespace, preserve leading/trailing structure
+                # Remove excessive internal spaces but keep single spaces and tabs/indentation
+                cleaned_line = re.sub(r'[ \t]{2,}', ' ', line)  # Multiple spaces/tabs -> single space
+                cleaned_line = re.sub(r' +$', '', cleaned_line)  # Trailing spaces only
+                cleaned_lines.append(cleaned_line)
+            else:
+                # Keep empty lines as-is for structure
+                cleaned_lines.append(line)
         
-        # Remove excessive empty lines
+        # Only remove excessive consecutive empty lines (3+ -> 2)
         cleaned = '\n'.join(cleaned_lines)
-        cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)
-        cleaned = cleaned.strip()
+        cleaned = re.sub(r'\n\s*\n\s*\n\s*\n+', '\n\n\n', cleaned)  # 4+ empty lines -> 3
+        cleaned = re.sub(r'^\s+|\s+$', '', cleaned)  # Trim start/end only
         
         return cleaned
     

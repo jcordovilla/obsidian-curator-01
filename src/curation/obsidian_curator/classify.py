@@ -1,51 +1,85 @@
 from .llm import chat_json
 
-CLASSIFY_SYS = """You are an expert classifier and relevance scorer for an expert Civil Engineering consultant specializing in infrastructure investment, digital transformation, and public-private partnerships (PPP/P3).
-Align with a strict professional relevance rubric: require concrete substance (data, methods, frameworks, case evidence, legislation, contracts). Be conservative and avoid keyword-only matches.
-Use ONLY the following CANONICAL CATEGORIES (max 7) when assigning categories:
-- Finance & Economics
-- Policy & Governance
-- Risk & Sustainability
-- Technology & Innovation
-- Knowledge & Professional Practice
-Map any broader/alternative labels to the closest canonical category. Sector (e.g., transport/water/energy) and geography (e.g., Spain/Europe/LATAM/Africa) must be expressed as tags/entities, not categories.
+# Unified Professional Context for all agents
+PROFESSIONAL_CONTEXT = """You are an AI assistant for a Senior Infrastructure Investment Specialist and Chartered Civil Engineer who:
+- Writes specialized articles and publications for industry journals
+- Develops investment theses and due diligence reports  
+- Advises on PPP/P3 structures and digital transformation
+- Requires evidence-based, citable content with clear provenance
+
+KNOWLEDGE BASE PURPOSE: Curate high-quality source material for:
+- Academic and industry publications
+- Investment memoranda and reports
+- Policy briefings and technical analyses
+- Professional presentations and case studies
+
+QUALITY STANDARDS: Content must be:
+- Factually accurate with clear attribution
+- Technically substantive with concrete details
+- Professionally relevant to infrastructure investment
+- Citation-ready with proper source documentation"""
+
+CLASSIFY_SYS = f"""{PROFESSIONAL_CONTEXT}
+
+CLASSIFICATION ROLE: You classify content for this specialized knowledge database.
+Align with strict professional relevance: require concrete substance (data, methods, frameworks, case evidence, legislation, contracts). Be conservative and avoid keyword-only matches.
+
+CRITICAL: You MUST use ONLY the 5 CANONICAL CATEGORIES below. Do NOT create new categories or use sector/geography terms as categories.
+
+CANONICAL CATEGORIES (select 1-3 only):
+- Finance & Economics: Financial instruments, economic analysis, cost-benefit studies, investment frameworks
+- Policy & Governance: Regulation, legislation, institutional frameworks, governance structures
+- Risk & Sustainability: Risk assessment, ESG factors, resilience planning, sustainability metrics
+- Technology & Innovation: Digital transformation, emerging technologies, innovation frameworks
+- Knowledge & Professional Practice: Standards, methodologies, case studies, best practices
+
+TAXONOMY MAPPING: Map broader domain concepts to canonical categories:
+- Infrastructure sectors (transport/water/energy/hospitals/railways) → relevant canonical category
+- Geographic regions (Spain/Europe/LATAM/Africa) → use as tags/entities, NOT categories
+- Technical domains → Technology & Innovation or Knowledge & Professional Practice
+- Financial concepts → Finance & Economics
+- Regulatory topics → Policy & Governance
+- Environmental/social topics → Risk & Sustainability
+
 Return strict JSON only (no prose, no markdown, no code fences)."""
 
 def classify_json(content, meta, cfg):
     text = content.get('text','')[:4000]
     title = meta.get("title","")
     
-    # Enhanced prompt with professional context
-    user = f"""Classify this content for an infrastructure expert's knowledge base. Follow the relevance agent rubric: only assign high relevance when the material contains concrete professional detail (technical/financial/governance specifics, methods, data, frameworks, case studies). Do not rely on keywords without evidence.
+    # Enhanced prompt with unified professional context
+    user = f"""Classify this content for a specialized knowledge database supporting professional publication writing.
 
 TITLE: {title}
 CONTENT: {text}
 
-AVAILABLE CATEGORIES: {", ".join(cfg["taxonomy"]["categories"])}
+EVALUATION CRITERIA:
+Assess content for potential use in specialized articles and publications. Only assign high relevance when material contains concrete professional substance suitable for citation in academic or industry publications.
 
-CANONICAL CATEGORIES (use only these for "categories"; map others here):
-- Finance & Economics
-- Policy & Governance
-- Risk & Sustainability
-- Technology & Innovation
-- Knowledge & Professional Practice
+CRITICAL CLASSIFICATION RULES:
+- Use ONLY the 5 canonical categories defined in the system prompt
+- Never create new categories or use sector/geography terms as categories
+- Map infrastructure sectors (transport/water/energy) to appropriate canonical categories
+- Put geography (Spain/Europe/LATAM/Africa) in tags/entities, NOT categories
+- Tags: 5-10 specific, professional terms, lower-case, hyphenated (e.g., "project-finance", "due-diligence", "ppp-contract")
+- Entities: Extract organizations, projects, technologies, locations (0-6 each), use canonical names
 
-Rules
-- Choose 1–3 categories ONLY from the CANONICAL CATEGORIES above.
-- Put sector (transport/water/energy/etc.) and geography (Spain/Europe/LATAM/Africa/etc.) in "tags" or "entities", NOT in "categories".
-- Tags must be 3–8 items, specific, lower-case, hyphenated where sensible (e.g., "project-finance", "value-for-money", "ppp-contract", "spain", "transport").
-- Entities should extract salient "organizations", "projects", "technologies", and "locations" (0–6 each), deduplicated, canonical names.
-- Compute "relevance_score" ∈ [0,1] conservatively:
-    - If CONTENT directly satisfies a canonical category with concrete detail → ≥ 0.70.
-    - If generic/high-level with little technical substance → 0.31–0.69.
-    - If personal/administrative/boilerplate or only filenames/links → ≤ 0.30 (cap ≤ 0.25 if only links/placeholders).
-    - If CONTENT < 100 words or mostly navigation/boilerplate → cap relevance_score ≤ 0.40.
+PUBLICATION READINESS SCORING (0-1):
+- CITATION-READY (≥0.80): Primary sources, research reports, legislation, technical standards with clear attribution
+- PROFESSIONAL ANALYSIS (0.60-0.79): Secondary analysis, expert commentary, case studies with substantial detail
+- BACKGROUND MATERIAL (0.40-0.59): General information, basic explanations, limited technical depth
+- UNSUITABLE (≤0.39): Personal notes, marketing materials, incomplete information, no clear source
+
+Special caps:
+- Content <100 words or mostly boilerplate: cap at 0.40
+- Only links/placeholders without substance: cap at 0.25
+- No clear source attribution: reduce score by 0.15
 
 Return JSON with exactly:
-- "categories": List of 1–3 canonical categories only
-- "tags": List of 3–8 professional tags (include sector/geography as tags, not categories)
-- "entities": Object with arrays "organizations", "projects", "technologies", "locations" (0–6 each)
-- "relevance_score": Number 0–1 indicating professional relevance
+- "categories": List of 1-3 canonical categories from system prompt
+- "tags": List of 5-10 professional tags
+- "entities": Object with "organizations", "projects", "technologies", "locations" arrays
+- "publication_readiness": Score 0-1 for suitability in professional publications
 
 Return strict JSON only."""
     

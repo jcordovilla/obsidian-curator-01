@@ -248,25 +248,51 @@ class WebClippingCleaner:
         return metadata
     
     def is_web_clipping(self, content: str, frontmatter: Dict) -> bool:
-        """Determine if content is a web clipping that needs cleaning."""
-        # Check for source URL
-        if frontmatter.get('source') and 'http' in str(frontmatter['source']):
-            return True
-        
-        # Check for common web clipping indicators
-        web_indicators = [
-            'AddThis Sharing Buttons',
-            'Share This Article',
-            'Subscribe to',
-            'Follow us on',
-            'Click here to'
-        ]
-        
-        content_lower = content.lower()
-        indicator_count = sum(1 for indicator in web_indicators if indicator.lower() in content_lower)
-        
-        # If multiple web indicators present, likely a web clipping
-        return indicator_count >= 2
+        """Determine if content is a web clipping that needs cleaning (not just referenced content)."""
+        # Use the same sophisticated logic as clean_html_like_clipping
+        if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
+            content_lower = content.lower()
+            
+            # Strong indicators of web clipping (not just referenced content)
+            web_scraping_indicators = [
+                # HTML structure
+                '<div', '<span', '<p class=', '<img', '<a href=',
+                # Navigation elements
+                'menu', 'navigation', 'breadcrumb', 'sidebar',
+                # Social/sharing elements  
+                'share this', 'follow us', 'subscribe', 'newsletter',
+                # Advertisement indicators
+                'advertisement', 'sponsored', 'ad server',
+                # Common web boilerplate
+                'cookie policy', 'privacy policy', 'terms of service',
+                'all rights reserved', 'copyright',
+                # Publication-specific indicators
+                'most viewed', 'most read', 'related articles',
+                'read more', 'continue reading'
+            ]
+            
+            # Count indicators present in content
+            indicator_count = sum(1 for indicator in web_scraping_indicators 
+                                if indicator in content_lower)
+            
+            # Check content structure
+            lines = content.split('\n')
+            short_lines = sum(1 for line in lines if 0 < len(line.strip()) < 30)
+            total_lines = len([line for line in lines if line.strip()])
+            
+            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', content))
+            word_count = len(content.split())
+            
+            # Determine if this is a web clipping based on multiple factors
+            return (
+                indicator_count >= 2 or  # Multiple web indicators
+                (total_lines > 10 and short_lines / total_lines > 0.4) or  # Many short lines
+                (word_count > 50 and link_count / word_count > 0.1)  # High link density
+            )
+        else:
+            # No URL source - check for HTML content in body
+            web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
+            return any(indicator in content.lower() for indicator in web_indicators)
 
 def convert_html_tables_to_markdown(content: str) -> str:
     """Convert HTML tables to Markdown tables."""
@@ -413,7 +439,9 @@ def remove_boilerplate_sections(content_lines: List[str]) -> List[str]:
                 i += 1
                 continue
         
-                cleaned_lines.append(line)
+        # Only append line if we're not skipping
+        if not skip_section:
+            cleaned_lines.append(line)
         i += 1
     
     return cleaned_lines
@@ -888,25 +916,25 @@ def apply_enhanced_cleaning(content: str) -> str:
             continue
         
         # Check against enhanced patterns
-            should_remove = False
-            for pattern in compiled_patterns:
-                if pattern.match(line_stripped):
-                    should_remove = True
-                    break
-            
+        should_remove = False
+        for pattern in compiled_patterns:
+            if pattern.match(line_stripped):
+                should_remove = True
+                break
+        
         # Additional checks for link-heavy lines
-            if not should_remove:
-                link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
-                word_count = len(line_stripped.split())
+        if not should_remove:
+            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+            word_count = len(line_stripped.split())
             if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
                 nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe', 'latest', 'leaders', 'briefing', 'united', 'states', 'americas', 'asia', 'china', 'europe', 'britain', 'international', 'business', 'finance', 'economics', 'science', 'technology', 'books', 'arts', 'obituary', 'special', 'reports', 'technology', 'quarterly', 'debates']
                 nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
                 if nav_count > 0:
                     should_remove = True
-            
-            # Keep the line if it doesn't match removal patterns
-            if not should_remove:
-                cleaned_lines.append(line)
+        
+        # Keep the line if it doesn't match removal patterns
+        if not should_remove:
+            cleaned_lines.append(line)
     
     # Join and clean up
     cleaned_content = '\n'.join(cleaned_lines)
@@ -920,13 +948,54 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     """Enhanced web clipping cleaner using proper Trafilatura integration."""
     import re
     
-    # Check if this is a web clipping
+    # Check if this is a web clipping (not just a note with URL source)
     is_web_clipping = False
-    if frontmatter:
-        is_web_clipping = frontmatter.get('source', '').startswith(('http://', 'https://'))
+    
+    if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
+        # URL source exists, but check if content shows signs of web scraping
+        content_lower = content.lower()
+        
+        # Strong indicators of web clipping (not just referenced content)
+        web_scraping_indicators = [
+            # HTML structure
+            '<div', '<span', '<p class=', '<img', '<a href=',
+            # Navigation elements
+            'menu', 'navigation', 'breadcrumb', 'sidebar',
+            # Social/sharing elements  
+            'share this', 'follow us', 'subscribe', 'newsletter',
+            # Advertisement indicators
+            'advertisement', 'sponsored', 'ad server',
+            # Common web boilerplate
+            'cookie policy', 'privacy policy', 'terms of service',
+            'all rights reserved', 'copyright',
+            # Publication-specific indicators
+            'most viewed', 'most read', 'related articles',
+            'read more', 'continue reading'
+        ]
+        
+        # Count indicators present in content
+        indicator_count = sum(1 for indicator in web_scraping_indicators 
+                            if indicator in content_lower)
+        
+        # Also check content structure - web clippings often have:
+        # - Many short lines (navigation/menu items)
+        # - High ratio of links to text
+        lines = content.split('\n')
+        short_lines = sum(1 for line in lines if 0 < len(line.strip()) < 30)
+        total_lines = len([line for line in lines if line.strip()])
+        
+        link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', content))
+        word_count = len(content.split())
+        
+        # Determine if this is a web clipping based on multiple factors
+        is_web_clipping = (
+            indicator_count >= 2 or  # Multiple web indicators
+            (total_lines > 10 and short_lines / total_lines > 0.4) or  # Many short lines
+            (word_count > 50 and link_count / word_count > 0.1)  # High link density
+        )
     else:
-        # Fallback: check content for web indicators
-        web_indicators = ['http://', 'https://', 'www.', 'html', 'div', 'class=', 'id=']
+        # No URL source - check for HTML content in body
+        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
         is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
     
     if not is_web_clipping:

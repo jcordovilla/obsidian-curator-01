@@ -1,16 +1,31 @@
 # Folder Structure
 
-This document explains the clear separation between different stages of note processing in the Obsidian Curator system.
+This document explains the clear separation between different stages of note processing in the Obsidian Curator system, including the advanced testing framework.
 
 ## Overview
 
-The system now uses three distinct vaults to clearly separate different stages of note processing:
+The system uses three distinct vaults for production processing and a comprehensive testing framework for evaluation and development:
 
+### Production Vaults
 ```
 /Users/jose/Documents/Obsidian/
 ├── Evermd/                          # RAW VAULT
 ├── Ever-preprocessed/               # PREPROCESSED VAULT  
 └── Ever-curated/                   # CURATED VAULT
+```
+
+### Testing Framework
+```
+tests/test_data/
+├── archive/                         # Historical test results
+│   ├── 20250928_235500_raw/        # Timestamped archives
+│   ├── 20250928_235500_preprocessed/
+│   └── 20250928_235500_curated/
+├── curated/
+│   ├── notes/                      # Successfully curated notes
+│   └── triage/                     # Notes requiring manual review
+├── preprocessed/                   # Cleaned test notes
+└── raw/                           # Fresh test notes
 ```
 
 ## Vault Descriptions
@@ -40,6 +55,48 @@ The system now uses three distinct vaults to clearly separate different stages o
   - LLM-generated summaries and classifications
   - Relevance scores and professional tags
   - Curated attachments (only relevant ones)
+
+## Testing Framework
+
+### Test Data Structure (`tests/test_data/`)
+
+#### Archive System (`archive/`)
+- **Purpose**: Preserves historical test results for comparison and analysis
+- **Structure**: Timestamped folders (e.g., `20250928_235500_raw/`)
+- **Contents**: Complete snapshots of test runs including raw, preprocessed, and curated results
+- **Benefits**: Enables performance tracking and regression testing
+
+#### Curated Test Results (`curated/`)
+- **`notes/`**: Successfully curated notes that passed all quality thresholds
+- **`triage/`**: Notes requiring manual review (scored in gray zone)
+- **Purpose**: Review curation decisions and quality of AI analysis
+
+#### Preprocessed Test Results (`preprocessed/`)
+- **Purpose**: Cleaned and standardized test notes
+- **Contents**: Boilerplate-removed content with enhanced formatting
+- **Use**: Validate preprocessing effectiveness and content preservation
+
+#### Raw Test Data (`raw/`)
+- **Purpose**: Fresh test notes selected randomly from production vault
+- **Contents**: Original notes and attachments for testing
+- **Selection**: Prioritizes notes with attachments for comprehensive testing
+
+### Testing Capabilities
+
+#### Reproducible Testing
+- **Seed-based selection**: Consistent test sets using `--seed` parameter
+- **Performance comparison**: Track improvements across model updates
+- **Regression testing**: Detect quality degradation over time
+
+#### Preservation System
+- **Automatic archiving**: Previous results moved to timestamped folders
+- **Work preservation**: Triage decisions and manual reviews maintained
+- **Historical analysis**: Compare performance across different configurations
+
+#### Incremental Testing
+- **New note testing**: Test additional notes without losing previous work
+- **Efficient evaluation**: Avoid re-testing already processed content
+- **Continuous improvement**: Build knowledge base of test results over time
 
 ## Configuration
 

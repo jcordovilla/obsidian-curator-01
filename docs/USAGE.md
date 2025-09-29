@@ -3,9 +3,11 @@
 ## Quick Start
 
 ### 1. Configure Paths
-Edit `config.py` to set your vault path:
+Edit `config.py` to set your vault paths:
 ```python
-VAULT_PATH = "/path/to/your/obsidian/vault"
+RAW_VAULT_PATH = "/path/to/your/raw/obsidian/vault"
+PREPROCESSED_VAULT_PATH = "/path/to/preprocessed/vault"
+CURATED_VAULT_PATH = "/path/to/curated/vault"
 ```
 
 ### 2. Update Configuration
@@ -13,18 +15,25 @@ VAULT_PATH = "/path/to/your/obsidian/vault"
 python scripts/update_config.py
 ```
 
-### 3. Run Analysis (Optional)
+### 3. Test the System (Recommended)
 ```bash
-python scripts/main.py --sample --analyze
+# Test with 10 random notes
+python tests/test_complete_pipeline.py 10
+
+# Test with specific seed for reproducibility
+python tests/test_complete_pipeline.py 10 --seed 42
+
+# Incremental testing (preserves previous results)
+python tests/test_complete_pipeline.py 15 --incremental
 ```
 
 ### 4. Process Your Vault
 ```bash
-# Test with sample
-python scripts/preprocess.py --sample 10 --dry-run
-
-# Process entire vault
+# Preprocessing (raw → preprocessed)
 python scripts/preprocess.py
+
+# Curation (preprocessed → curated)
+python -m src.curation.obsidian_curator.main
 ```
 
 ## Available Commands
@@ -102,12 +111,43 @@ CURATION_OUTPUT_PATH = "/path/to/curated/vault"
 6. **Validation** - Quality checks
 7. **Output** - Generate clean notes
 
+## 🧪 Testing System
+
+### **Complete Pipeline Testing**
+```bash
+# Basic testing
+python tests/test_complete_pipeline.py 10
+
+# Reproducible testing with seed
+python tests/test_complete_pipeline.py 10 --seed 42
+
+# Incremental testing (preserves previous work)
+python tests/test_complete_pipeline.py 15 --incremental
+
+# Clean slate testing
+python tests/test_complete_pipeline.py 10 --no-preserve
+```
+
+### **Test Output Structure**
+- **`tests/test_data/curated/notes/`** - Successfully curated notes
+- **`tests/test_data/curated/triage/`** - Notes requiring manual review
+- **`tests/test_data/archive/`** - Historical test results with timestamps
+- **`tests/test_data/preprocessed/`** - Cleaned test notes
+- **`tests/test_data/raw/`** - Fresh test notes
+
+### **Performance Monitoring**
+- Processing speed and resource usage
+- Curation quality and decision patterns
+- Model performance across different content types
+- Archive system for historical comparison
+
 ## Safety Features
 
 - **Automatic Backups** - Original files backed up
 - **Dry Run Mode** - Test without changes
 - **Validation** - Quality and integrity checks
 - **Error Handling** - Comprehensive error recovery
+- **Test Preservation** - Historical test results archived
 
 ## Troubleshooting
 

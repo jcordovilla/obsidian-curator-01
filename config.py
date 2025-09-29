@@ -189,8 +189,8 @@ def get_curation_config():
             'out_assets': CURATED_ATTACHMENTS_PATH
         },
         'models': {
-            'fast': 'llama3.1:8b',  # Better model for professional assessment
-            'main': 'llama3.1:8b',
+            'fast': 'llama3.2:3b',  # Upgraded to Llama 3.2:3B for better efficiency
+            'main': 'llama3.2:3b',
             'embed': 'nomic-embed-text'
         },
         'taxonomy': {

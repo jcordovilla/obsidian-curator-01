@@ -3,6 +3,7 @@ Metadata standardization module for Obsidian notes.
 """
 
 import re
+import os
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -20,13 +21,14 @@ class MetadataStandardizer:
             'iso_datetime': r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
         }
     
-    def standardize_metadata(self, frontmatter: Dict, filename: str = '') -> Dict:
+    def standardize_metadata(self, frontmatter: Dict, filename: str = '', file_path: str = '') -> Dict:
         """
         Standardize metadata fields according to specifications.
         
         Args:
             frontmatter: Original metadata dictionary
             filename: Filename for title fallback
+            file_path: Full file path for timestamp fallback
             
         Returns:
             Standardized metadata dictionary
@@ -35,8 +37,8 @@ class MetadataStandardizer:
         
         # Standardize required fields
         standardized['title'] = self._standardize_title(frontmatter, filename)
-        standardized['date created'] = self._standardize_date(frontmatter.get('date created'))
-        standardized['date modified'] = self._standardize_date(frontmatter.get('date modified'))
+        standardized['date created'] = self._standardize_date(frontmatter.get('date created'), file_path, 'created')
+        standardized['date modified'] = self._standardize_date(frontmatter.get('date modified'), file_path, 'modified')
         standardized['language'] = self._standardize_language(frontmatter.get('language', 'en'))
         
         # Handle optional fields
@@ -70,58 +72,75 @@ class MetadataStandardizer:
         
         return title
     
-    def _standardize_date(self, date_value: Optional[str]) -> Optional[str]:
-        """Standardize date to ISO format."""
-        if not date_value:
-            return None
+    def _standardize_date(self, date_value: Optional[str], file_path: str = '', date_type: str = 'created') -> str:
+        """Standardize date to ISO format, using file stats as fallback."""
+        if date_value:
+            date_str = str(date_value).strip()
+            
+            # Try to parse Evernote format
+            evernote_match = re.match(self.date_patterns['evernote_full'], date_str)
+            if evernote_match:
+                try:
+                    # Parse Evernote format: "Wednesday, July 11th 2018, 12:19:06 pm"
+                    parts = evernote_match.groups()
+                    month_name = parts[1]
+                    day = int(re.sub(r'\D', '', parts[2]))  # Remove ordinal suffix
+                    year = int(parts[3])
+                    hour = int(parts[4])
+                    minute = int(parts[5])
+                    second = int(parts[6])
+                    am_pm = parts[7].lower()
+                    
+                    # Convert to 24-hour format
+                    if am_pm == 'pm' and hour != 12:
+                        hour += 12
+                    elif am_pm == 'am' and hour == 12:
+                        hour = 0
+                    
+                    # Convert month name to number
+                    month_map = {
+                        'january': 1, 'february': 2, 'march': 3, 'april': 4,
+                        'may': 5, 'june': 6, 'july': 7, 'august': 8,
+                        'september': 9, 'october': 10, 'november': 11, 'december': 12
+                    }
+                    month = month_map.get(month_name.lower(), 1)
+                    
+                    dt = datetime(year, month, day, hour, minute, second)
+                    return dt.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                except (ValueError, KeyError):
+                    pass
+            
+            # Try to parse ISO format
+            iso_match = re.match(self.date_patterns['iso_datetime'], date_str)
+            if iso_match:
+                return iso_match.group(1)
+            
+            iso_date_match = re.match(self.date_patterns['iso_date'], date_str)
+            if iso_date_match:
+                return f"{iso_date_match.group(1)} 00:00:00"
+            
+            # If we can parse it but it's not standard, return the original
+            if date_str:
+                return date_str
         
-        date_str = str(date_value).strip()
-        
-        # Try to parse Evernote format
-        evernote_match = re.match(self.date_patterns['evernote_full'], date_str)
-        if evernote_match:
+        # Fallback: Use file system timestamps if file_path is provided
+        if file_path and os.path.exists(file_path):
             try:
-                # Parse Evernote format: "Wednesday, July 11th 2018, 12:19:06 pm"
-                parts = evernote_match.groups()
-                month_name = parts[1]
-                day = int(re.sub(r'\D', '', parts[2]))  # Remove ordinal suffix
-                year = int(parts[3])
-                hour = int(parts[4])
-                minute = int(parts[5])
-                second = int(parts[6])
-                am_pm = parts[7].lower()
+                file_stat = os.stat(file_path)
+                if date_type == 'created':
+                    # Use creation time (or modification time if creation time not available)
+                    timestamp = getattr(file_stat, 'st_birthtime', file_stat.st_ctime)
+                else:  # modified
+                    timestamp = file_stat.st_mtime
                 
-                # Convert to 24-hour format
-                if am_pm == 'pm' and hour != 12:
-                    hour += 12
-                elif am_pm == 'am' and hour == 12:
-                    hour = 0
-                
-                # Convert month name to number
-                month_map = {
-                    'january': 1, 'february': 2, 'march': 3, 'april': 4,
-                    'may': 5, 'june': 6, 'july': 7, 'august': 8,
-                    'september': 9, 'october': 10, 'november': 11, 'december': 12
-                }
-                month = month_map.get(month_name.lower(), 1)
-                
-                dt = datetime(year, month, day, hour, minute, second)
+                dt = datetime.fromtimestamp(timestamp)
                 return dt.strftime('%Y-%m-%d %H:%M:%S')
-                
-            except (ValueError, KeyError):
+            except (OSError, AttributeError):
                 pass
         
-        # Try to parse ISO format
-        iso_match = re.match(self.date_patterns['iso_datetime'], date_str)
-        if iso_match:
-            return iso_match.group(1)
-        
-        iso_date_match = re.match(self.date_patterns['iso_date'], date_str)
-        if iso_date_match:
-            return f"{iso_date_match.group(1)} 00:00:00"
-        
-        # If we can't parse it, return the original
-        return date_str
+        # Final fallback: Current timestamp
+        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     def _standardize_language(self, language: str) -> str:
         """Standardize language codes."""

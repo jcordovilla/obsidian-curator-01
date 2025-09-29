@@ -23,18 +23,51 @@ def extract_image_meaning(abs_path):
         if ocr_text.strip():
             # Use LLM to analyze the OCR text and extract meaning
             from .llm import chat_text
-            prompt = f"""Analyze this text extracted from an image. Be conservative and factual - only describe what you can reasonably infer from the OCR text.
-
-OCR Text: {ocr_text}
-
-CRITICAL: Do not invent or hallucinate content. If the OCR text is unclear, garbled, or insufficient to determine the image content, state that clearly.
-
-AVOID false assumptions about infrastructure relevance. Just because numbers or technical terms appear doesn't mean it's infrastructure-related.
-
-Describe what the image likely shows based ONLY on the OCR text evidence:"""
+            # Import unified professional context for image analysis
+            from .classify import PROFESSIONAL_CONTEXT
             
-            # Use a simple text model since vision models aren't available
-            analysis = chat_text('gemma3:4b', 
+            prompt = f"""{PROFESSIONAL_CONTEXT}
+
+IMAGE ANALYSIS ROLE: Analyze OCR text from images for potential use in specialized infrastructure publications.
+
+OCR TEXT: {ocr_text}
+
+ANALYSIS FRAMEWORK:
+Evaluate this image content for inclusion in a knowledge database supporting professional publication writing.
+
+ASSESSMENT CRITERIA:
+1. CONTENT TYPE: What type of material does this appear to be?
+   - Technical diagram/chart with data
+   - Document excerpt with professional content
+   - Screenshot of software/interface
+   - Photo of infrastructure/equipment
+   - Marketing/promotional material
+   - Personal/administrative content
+
+2. PROFESSIONAL VALUE: How suitable is this for citation in professional publications?
+   - HIGH: Technical diagrams, data charts, official documents, professional photography
+   - MEDIUM: Industry presentations, conference materials, technical interfaces
+   - LOW: Marketing materials, personal notes, unclear screenshots
+   - NONE: Corrupted text, personal content, unrelated material
+
+3. TECHNICAL SUBSTANCE: What specific professional content is visible?
+   - Quantitative data, metrics, measurements
+   - Technical specifications or standards
+   - Methodological frameworks or processes
+   - Policy/regulatory information
+   - Financial/economic data
+
+CRITICAL REQUIREMENTS:
+- Base analysis ONLY on visible OCR text evidence
+- Do not invent or assume content beyond what's readable
+- Avoid false assumptions about infrastructure relevance
+- If OCR is garbled or insufficient, state this clearly
+- Assess publication utility honestly
+
+OUTPUT: Concise professional assessment focusing on potential value for specialized infrastructure writing and research."""
+            
+            # Use Mistral for efficient image analysis
+            analysis = chat_text('mistral:latest', 
                                "You are an expert at analyzing technical content from images.", 
                                prompt, 
                                tokens=300, 

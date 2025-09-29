@@ -51,10 +51,16 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
     import shutil
     from datetime import datetime
     
-    # Set random seed if provided for reproducible results
+    # Set random seed for reproducible results or ensure randomness
     if seed is not None:
         random.seed(seed)
         print(f"✓ Set random seed to {seed} for reproducible results")
+    else:
+        # Use current time as seed to ensure different selections between runs
+        import time
+        auto_seed = int(time.time() * 1000) % 1000000
+        random.seed(auto_seed)
+        print(f"✓ Using automatic random seed: {auto_seed} (for true randomization)")
     
     # Get test raw vault path
     test_raw_vault = test_cfg['paths']['test_raw_vault']
@@ -121,28 +127,67 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
             all_notes = [note for note in all_notes if note.name not in excluded_notes]
             print(f"📋 Available for testing: {len(all_notes)} new notes")
     
-    # Find notes with attachments first
+    # Categorize notes by attachment status for reporting
+    # Build a mapping of sanitized names to actual attachment directories
+    attachments_dir = Path(raw_vault) / "attachments"
+    attachment_mapping = {}
+    if attachments_dir.exists():
+        for att_dir in attachments_dir.iterdir():
+            if att_dir.is_dir() and att_dir.name.endswith('.resources'):
+                # Remove .resources extension to get the base name
+                base_name = att_dir.name[:-10]
+                attachment_mapping[base_name] = att_dir
+    
+    def sanitize_filename(filename):
+        """Sanitize filename the same way Obsidian/Evernote does for attachment directories."""
+        # Convert multiple spaces to double underscores, single spaces to single underscores
+        import re
+        sanitized = re.sub(r'\s{2,}', '__', filename)  # Multiple spaces -> __
+        sanitized = re.sub(r'\s', '_', sanitized)      # Single spaces -> _
+        return sanitized
+    
     notes_with_attachments = []
     notes_without_attachments = []
     
     for note in all_notes:
         note_stem = note.stem
-        att_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
-        if att_dir.exists():
+        
+        # Try exact match first
+        exact_att_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        if exact_att_dir.exists():
             notes_with_attachments.append(note)
-        else:
-            notes_without_attachments.append(note)
+            continue
+            
+        # Try sanitized match
+        sanitized_stem = sanitize_filename(note_stem)
+        if sanitized_stem in attachment_mapping:
+            notes_with_attachments.append(note)
+            continue
+            
+        # No attachments found
+        notes_without_attachments.append(note)
     
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # Select a mix: prioritize notes with attachments, then fill with notes without
-    num_with_attachments = min(num_notes, len(notes_with_attachments))
-    num_without_attachments = min(num_notes - num_with_attachments, len(notes_without_attachments))
+    # TRUE RANDOM SELECTION: Sample from ALL notes regardless of attachments
+    # This fixes the selection bias that was causing repeated notes
+    if len(all_notes) < num_notes:
+        print(f"⚠️  Warning: Only {len(all_notes)} notes available, selecting all")
+        selected_notes = all_notes
+    else:
+        selected_notes = random.sample(all_notes, num_notes)
     
-    selected_with_attachments = random.sample(notes_with_attachments, num_with_attachments)
-    selected_without_attachments = random.sample(notes_without_attachments, num_without_attachments)
-    selected_notes = selected_with_attachments + selected_without_attachments
+    # Report the mix we actually got
+    selected_with_attachments = []
+    selected_without_attachments = []
+    for note in selected_notes:
+        note_stem = note.stem
+        att_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        if att_dir.exists():
+            selected_with_attachments.append(note)
+        else:
+            selected_without_attachments.append(note)
     
     print(f"Selected {len(selected_with_attachments)} notes with attachments")
     print(f"Selected {len(selected_without_attachments)} notes without attachments")
@@ -156,11 +201,21 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
         shutil.copy2(note_path, new_note_path)
         print(f"  Copied: {note_path.name} -> {new_note_name}")
         
-        # Copy associated attachments from central attachments folder
+        # Copy associated attachments using the same sanitized matching logic
         note_stem = note_path.stem
-        real_attachments_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        real_attachments_dir = None
         
-        if real_attachments_dir.exists():
+        # Try exact match first
+        exact_att_dir = Path(raw_vault) / "attachments" / f"{note_stem}.resources"
+        if exact_att_dir.exists():
+            real_attachments_dir = exact_att_dir
+        else:
+            # Try sanitized match
+            sanitized_stem = sanitize_filename(note_stem)
+            if sanitized_stem in attachment_mapping:
+                real_attachments_dir = attachment_mapping[sanitized_stem]
+        
+        if real_attachments_dir and real_attachments_dir.exists():
             try:
                 new_attachments_dir = Path(test_raw_vault) / "attachments" / f"{new_note_name}.resources"
                 shutil.copytree(real_attachments_dir, new_attachments_dir)

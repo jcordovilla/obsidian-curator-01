@@ -1,6 +1,9 @@
 import math, re
 from .llm import embed_text, chat_json
 
+# Import unified professional context
+from .classify import PROFESSIONAL_CONTEXT
+
 def calculate_content_richness(text, title, meta):
     """Calculate content richness considering content type and quality."""
     # Basic length-based richness
@@ -83,41 +86,52 @@ def calculate_content_richness(text, title, meta):
     return final_richness
 
 def get_llm_relevance_score(text, title, cfg):
-    """Use LLM to assess professional relevance for infrastructure expert."""
+    """Use LLM to assess professional relevance for publication-ready content."""
     
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
-    prompt = f"""You are evaluating content for a senior infrastructure investment professional who works across multiple domains including financing, technology, governance, and risk management.
+    prompt = f"""{PROFESSIONAL_CONTEXT}
 
-    TITLE: {title}
-    CONTENT: {text_sample}
+RELEVANCE ANALYSIS ROLE: Evaluate content for inclusion in a specialized knowledge database supporting professional publication writing.
 
-    Rate this content on:
-    - relevance: How relevant is this to the professional knowledge needs of a senior infrastructure investment specialist? (0-1)
-    - credibility: How credible is the source? (0-1) 
-    - novelty: How novel/insightful is the content? (0-1)
+TITLE: {title}
+CONTENT: {text_sample}
 
-    RELEVANCE GUIDELINES:
-    - HIGHLY RELEVANT (0.8-1.0): Direct infrastructure projects, PPPs, project finance, digital transformation, emerging technologies, financial instruments, technical analysis, case studies, professional reports
-    - MODERATELY RELEVANT (0.5-0.7): Alternative financing methods, business development, professional practices, sector analysis, technology applications, academic content, financial services
-    - LOW RELEVANCE (0.2-0.4): General business content, social media marketing, personal productivity
-    - IRRELEVANT (0.0-0.1): Personal documents, bills, casual notes, unrelated content
+EVALUATION DIMENSIONS:
+Rate each dimension (0-1) based on suitability for professional publications:
 
-    CRITICAL EXCLUSIONS - Rate as IRRELEVANT (0.0-0.1):
-    - Software documentation, user manuals, technical tutorials (unless about infrastructure-specific tools)
-    - Company websites, marketing materials, navigation pages
-    - Personal notes, reminders, to-do lists
-    - News headlines without analysis or insights
-    - Generic business advice not specific to infrastructure
-    - Screenshots or images without substantive professional content
-    - Audio/video files without transcripts or descriptions
+1. PROFESSIONAL RELEVANCE: How valuable is this for infrastructure investment publications?
+   - PUBLICATION-READY (0.8-1.0): Primary sources, research reports, technical analysis, case studies with concrete data
+   - PROFESSIONALLY USEFUL (0.6-0.79): Expert commentary, sector analysis, methodological frameworks
+   - BACKGROUND VALUE (0.4-0.59): General industry information, basic concepts, contextual material  
+   - LIMITED VALUE (0.2-0.39): Tangentially related content, marketing materials, news without analysis
+   - NO VALUE (0.0-0.19): Personal notes, unrelated content, corrupted data
 
-    PROFESSIONAL CONTEXT: This professional needs knowledge across financing methods, emerging technologies, governance practices, and risk management to inform infrastructure investment decisions. Content must provide actionable professional knowledge, not just mention infrastructure topics.
+2. SOURCE CREDIBILITY: How trustworthy and authoritative is the source?
+   - AUTHORITATIVE (0.8-1.0): Government agencies, established research institutions, peer-reviewed sources
+   - CREDIBLE (0.6-0.79): Industry publications, professional organizations, expert practitioners
+   - MODERATE (0.4-0.59): Trade publications, company reports, conference presentations
+   - QUESTIONABLE (0.2-0.39): Blogs, social media, unverified sources
+   - UNRELIABLE (0.0-0.19): Anonymous sources, clearly biased material, broken links
 
-    IMPORTANT: Be conservative. If content appears to be documentation, tutorials, basic news, or company marketing rather than professional analysis or insights, rate relevance as LOW (0.2) or IRRELEVANT (0.0-0.1).
+3. CONTENT DEPTH: How substantial and detailed is the technical content?
+   - COMPREHENSIVE (0.8-1.0): Detailed methodology, extensive data, thorough analysis
+   - SUBSTANTIAL (0.6-0.79): Good technical detail, some data/evidence, clear frameworks
+   - ADEQUATE (0.4-0.59): Basic technical content, limited data, general frameworks
+   - SUPERFICIAL (0.2-0.39): High-level overview, minimal detail, mostly descriptive
+   - INSUFFICIENT (0.0-0.19): No technical substance, only headlines/summaries
 
-    Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "novelty": 0.xx, "reasoning": "brief explanation"}}"""
+CRITICAL EXCLUSIONS (automatic 0.0-0.2 scores):
+- Personal documents, bills, to-do lists, reminders
+- Software manuals, user guides (unless infrastructure-specific)
+- Marketing materials, company websites, promotional content
+- Corrupted files, placeholder content, navigation elements
+- News headlines without analysis or expert commentary
+
+CONTEXT: Content will be used to support writing of academic papers, industry reports, investment analyses, and policy briefings. Prioritize material that provides citable evidence, concrete data, and professional insights.
+
+Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "depth": 0.xx, "reasoning": "concise explanation focusing on publication utility"}}"""
 
     try:
         result = chat_json(cfg['models']['fast'], 
@@ -129,8 +143,8 @@ def get_llm_relevance_score(text, title, cfg):
         return {
             'relevance': min(1.0, max(0.0, result.get('relevance', 0.5))),
             'credibility': min(1.0, max(0.0, result.get('credibility', 0.5))),
-            'novelty': min(1.0, max(0.0, result.get('novelty', result.get('novelity', 0.5)))),  # Handle typo in LLM response
-            'reasoning': result.get('reasoning', 'No reasoning provided')
+            'depth': min(1.0, max(0.0, result.get('depth', 0.5))),  # Changed from novelty to depth
+            'llm_reasoning': result.get('reasoning', 'No reasoning provided')
         }
     except Exception as e:
         print(f"Warning: LLM relevance scoring failed: {e}")
@@ -138,8 +152,8 @@ def get_llm_relevance_score(text, title, cfg):
         return {
             'relevance': 0.3,
             'credibility': 0.4,
-            'novelty': 0.3,
-            'reasoning': 'LLM scoring failed, using fallback'
+            'depth': 0.3,
+            'llm_reasoning': 'LLM scoring failed, using fallback'
         }
 
 def analyze_features(content, meta, cfg, relevance_score=None):
@@ -159,21 +173,21 @@ def analyze_features(content, meta, cfg, relevance_score=None):
         'embedding': embedding,
         'relevance': llm_scores['relevance'],
         'credibility': llm_scores['credibility'],
-        'novelty': llm_scores['novelty'],
+        'depth': llm_scores['depth'],  # Changed from novelty to depth
         'richness': calculate_content_richness(text, title, meta),  # More sophisticated richness calculation
-        'llm_reasoning': llm_scores['reasoning']
+        'llm_reasoning': llm_scores['llm_reasoning']
     }
     return features
 
 def score_usefulness(feats, cfg):
-    """Score usefulness using LLM-assessed professional relevance."""
-    # More balanced weights - relevance is key but not overwhelming
-    w = dict(relevance=0.70, credibility=0.20, novelty=0.05, richness=0.05)
+    """Score usefulness using LLM-assessed professional relevance for publications."""
+    # Publication-focused weights - emphasize relevance and depth for citation quality
+    w = dict(relevance=0.45, credibility=0.25, depth=0.20, richness=0.10)
     
-    # Simple weighted combination of LLM scores plus content richness
+    # Weighted combination optimized for publication utility
     score = (w['relevance'] * feats['relevance'] +
              w['credibility'] * feats['credibility'] +
-             w['novelty'] * feats['novelty'] +
+             w['depth'] * feats['depth'] +
              w['richness'] * feats['richness'])
     
     return max(0.0, min(1.0, score))
