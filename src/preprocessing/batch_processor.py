@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ..utils.file_handler import FileHandler
 from .metadata_standardizer import MetadataStandardizer
 from .web_clipping_cleaner import WebClippingCleaner
+from .web_content_processor import WebContentProcessor
 from .content_classifier import ContentClassifier
 from .quality_validator import QualityValidator
 
@@ -39,6 +40,7 @@ class BatchProcessor:
         self.file_handler = FileHandler(backup_dir=self.output_path / "backup")
         self.metadata_standardizer = MetadataStandardizer()
         self.web_cleaner = WebClippingCleaner()
+        self.web_processor = WebContentProcessor()
         self.classifier = ContentClassifier()
         self.validator = QualityValidator()
         
@@ -89,8 +91,21 @@ class BatchProcessor:
         if not dry_run:
             self._handle_attachments_folder()
         
-        # Discover files
-        files_to_process = list(self.vault_path.rglob(file_pattern))
+        # Discover files, excluding the output directory to prevent reprocessing
+        all_files = list(self.vault_path.rglob(file_pattern))
+        
+        # Filter out files in the output directory to prevent reprocessing
+        # Only filter if output directory is within the vault path
+        try:
+            output_dir_str = str(self.output_path.relative_to(self.vault_path))
+            files_to_process = [
+                f for f in all_files 
+                if not str(f.relative_to(self.vault_path)).startswith(output_dir_str)
+            ]
+        except ValueError:
+            # Output directory is not within vault path, so no filtering needed
+            files_to_process = all_files
+        
         self.stats['total_files'] = len(files_to_process)
         
         print(f"Found {len(files_to_process)} files to process")
@@ -245,16 +260,45 @@ class BatchProcessor:
                     if cleaning_stats and cleaning_stats.get('removed_chars', 0) > 0:
                         result['changes_made'].append(f"removed_{cleaning_stats['removed_chars']}_chars_boilerplate")
                         result['cleaning_stats'] = cleaning_stats
+                    
+                    # Extract article metadata for web clippings
+                    article_metadata = self.web_cleaner.extract_article_metadata(content)
+                    if article_metadata:
+                        # Merge article metadata into standardized metadata
+                        for key, value in article_metadata.items():
+                            if value and key not in standardized_metadata:
+                                standardized_metadata[key] = value
+                        result['changes_made'].append('enriched_article_metadata')
+                        
                 except Exception as e:
                     result['changes_made'].append('web_cleaning_failed')
-                    result['cleaning_error'] = str(e)
-                    # Continue with original content if cleaning fails
+            
+            # Stage 6.5: Web Content Processing (for academic publications)
+            if category in ['web_clipping', 'news_article'] and frontmatter.get('source', '').startswith(('http://', 'https://')):
+                try:
+                    web_enhancement = self.web_processor.process_note_with_web_content(processed_content, standardized_metadata)
+                    if web_enhancement:
+                        processed_content = web_enhancement['enhanced_content']
+                        # Merge web publication metadata
+                        for key, value in web_enhancement['enhanced_metadata'].items():
+                            standardized_metadata[key] = value
+                        result['changes_made'].append('enhanced_with_web_publication')
+                        result['web_publication'] = web_enhancement['web_publication']
+                except Exception as e:
+                    result['changes_made'].append('web_enhancement_failed')
+                    result['web_enhancement_error'] = str(e)
             
             elif category == 'pdf_annotation':
                 # Minimal processing for PDF annotations
                 processed_content = self._clean_pdf_annotation(content)
                 if processed_content != original_content:
                     result['changes_made'].append('pdf_annotation_cleaned')
+            
+            elif category == 'audio_annotation':
+                # Minimal processing for audio annotations
+                processed_content = self._clean_audio_annotation(content)
+                if processed_content != original_content:
+                    result['changes_made'].append('audio_annotation_cleaned')
             
             elif category == 'personal_note':
                 # Gentle formatting cleanup for personal notes
@@ -264,12 +308,18 @@ class BatchProcessor:
             
             # Stage 6: Attachment Validation
             result['stages_completed'].append('attachment_validation')
-            if not dry_run:  # Only validate if we have the attachments copied
+            # Validate attachments in both dry run and normal run
+            if dry_run:
+                # In dry run, validate against original attachments location
+                attachment_validation = self._validate_attachments_dry_run(processed_content, file_path.name)
+            else:
+                # In normal run, validate against copied attachments
                 attachment_validation = self._validate_attachments(processed_content, file_path.name)
-                result['attachment_validation'] = attachment_validation
-                
-                if not attachment_validation['all_valid']:
-                    result['changes_made'].append(f"missing_{len(attachment_validation['missing_attachments'])}_attachments")
+            
+            result['attachment_validation'] = attachment_validation
+            
+            if not attachment_validation['all_valid']:
+                result['changes_made'].append(f"missing_{len(attachment_validation['missing_attachments'])}_attachments")
             
             # Stage 7: Quality Validation
             result['stages_completed'].append('quality_validation')
@@ -324,6 +374,13 @@ class BatchProcessor:
     
     def _clean_pdf_annotation(self, content: str) -> str:
         """Minimal cleaning for PDF annotation notes."""
+        # Just clean up excessive whitespace
+        cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+        cleaned = cleaned.strip()
+        return cleaned
+    
+    def _clean_audio_annotation(self, content: str) -> str:
+        """Minimal cleaning for audio annotation notes."""
         # Just clean up excessive whitespace
         cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
         cleaned = cleaned.strip()
@@ -401,6 +458,33 @@ class BatchProcessor:
         
         for ref in references:
             attachment_path = self.output_attachments_path / ref
+            if attachment_path.exists():
+                validation['valid_references'] += 1
+            else:
+                validation['missing_attachments'].append(ref)
+                validation['all_valid'] = False
+        
+        return validation
+    
+    def _validate_attachments_dry_run(self, content: str, filename: str) -> Dict:
+        """Validate attachments in dry run mode by checking original vault location."""
+        validation = {
+            'total_references': 0,
+            'valid_references': 0,
+            'missing_attachments': [],
+            'all_valid': True
+        }
+        
+        # Find all attachment references
+        import re
+        attachment_pattern = re.compile(r'!\[\[attachments/([^\]]+)\]\]')
+        references = attachment_pattern.findall(content)
+        
+        validation['total_references'] = len(references)
+        
+        for ref in references:
+            # Check in original vault attachments folder
+            attachment_path = self.vault_attachments_path / ref
             if attachment_path.exists():
                 validation['valid_references'] += 1
             else:

@@ -24,22 +24,47 @@ CLASSIFY_SYS = f"""{PROFESSIONAL_CONTEXT}
 CLASSIFICATION ROLE: You classify content for this specialized knowledge database.
 Align with strict professional relevance: require concrete substance (data, methods, frameworks, case evidence, legislation, contracts). Be conservative and avoid keyword-only matches.
 
-CRITICAL: You MUST use ONLY the 5 CANONICAL CATEGORIES below. Do NOT create new categories or use sector/geography terms as categories.
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, assume, or infer content not explicitly present in the provided text
+- NEVER add professional context, background, or interpretation beyond what is stated
+- NEVER reference external sources, studies, or organizations not mentioned in the text
+- If content is insufficient for proper classification, state this honestly
+- Base ALL assessments strictly on the provided document metadata and content
+- Every classification decision must be directly traceable to the source material
 
-CANONICAL CATEGORIES (select 1-3 only):
-- Finance & Economics: Financial instruments, economic analysis, cost-benefit studies, investment frameworks
-- Policy & Governance: Regulation, legislation, institutional frameworks, governance structures
-- Risk & Sustainability: Risk assessment, ESG factors, resilience planning, sustainability metrics
-- Technology & Innovation: Digital transformation, emerging technologies, innovation frameworks
-- Knowledge & Professional Practice: Standards, methodologies, case studies, best practices
+CRITICAL: You MUST use ONLY the infrastructure taxonomy categories below. Do NOT create new categories or use geographic regions as categories.
 
-TAXONOMY MAPPING: Map broader domain concepts to canonical categories:
-- Infrastructure sectors (transport/water/energy/hospitals/railways) → relevant canonical category
-- Geographic regions (Spain/Europe/LATAM/Africa) → use as tags/entities, NOT categories
-- Technical domains → Technology & Innovation or Knowledge & Professional Practice
-- Financial concepts → Finance & Economics
-- Regulatory topics → Policy & Governance
-- Environmental/social topics → Risk & Sustainability
+INFRASTRUCTURE TAXONOMY CATEGORIES (select 1-3 only):
+- Infrastructure Investment: Core investment strategies, funding mechanisms, financial structures
+- PPP/P3: Public-private partnerships, concession models, collaborative frameworks
+- Concessions: Long-term infrastructure concessions, operational agreements
+- Project Finance: Financing structures, risk allocation, financial modeling
+- Risk Management: Risk assessment, mitigation strategies, insurance frameworks
+- Roads & Transport: Transportation infrastructure, mobility solutions, traffic management
+- Water & Wastewater: Water infrastructure, sanitation systems, resource management
+- Energy: Power generation, distribution, renewable energy, grid systems
+- Hospitals & Social Infrastructure: Healthcare facilities, social services, community infrastructure
+- Railways: Rail systems, high-speed rail, freight networks, station infrastructure
+- Digital Transformation: Technology adoption, digital infrastructure, smart systems
+- AI & Machine Learning: Artificial intelligence applications, predictive analytics, automation
+- Digital Twins: Digital replicas, simulation models, virtual infrastructure
+- Geospatial Data: Geographic information systems, mapping, location intelligence
+- Process Automation: Workflow automation, robotic process automation, efficiency systems
+- Governance & Transparency: Regulatory compliance, accountability frameworks, oversight
+- Policy & Regulation: Legislative frameworks, regulatory policies, compliance requirements
+- Strategic Planning: Long-term planning, development strategies, vision frameworks
+- Asset Management: Infrastructure lifecycle management, maintenance strategies, optimization
+- Technical Due Diligence: Technical assessment, feasibility analysis, engineering review
+- Feasibility Studies: Project viability analysis, technical feasibility, economic assessment
+- Market Intelligence: Industry analysis, market research, competitive intelligence
+- Critical Infrastructure Protection: Security frameworks, resilience planning, threat mitigation
+- ESG & Sustainability: Environmental, social, governance factors, sustainable development
+- Climate Resilience: Climate adaptation, environmental sustainability, green infrastructure
+- Innovation & R&D: Research and development, technological innovation, pilot projects
+- Capacity Building: Skills development, institutional strengthening, knowledge transfer
+
+GEOGRAPHIC REGIONS (use as tags/entities, NOT categories):
+- Spain, Europe, LATAM, International Development, Africa, Asia, North America
 
 Return strict JSON only (no prose, no markdown, no code fences)."""
 
@@ -47,20 +72,31 @@ def classify_json(content, meta, cfg):
     text = content.get('text','')[:4000]
     title = meta.get("title","")
     
+    # Extract metadata for better classification context
+    source = meta.get('source', 'Not specified')
+    language = meta.get('language', 'Unknown')
+    date_created = meta.get('date created', 'Unknown')
+    date_modified = meta.get('date modified', 'Unknown')
+    
     # Enhanced prompt with unified professional context
     user = f"""Classify this content for a specialized knowledge database supporting professional publication writing.
 
-TITLE: {title}
+DOCUMENT METADATA:
+Title: {title}
+Source: {source}
+Language: {language}
+Created: {date_created}
+Modified: {date_modified}
+
 CONTENT: {text}
 
 EVALUATION CRITERIA:
 Assess content for potential use in specialized articles and publications. Only assign high relevance when material contains concrete professional substance suitable for citation in academic or industry publications.
 
 CRITICAL CLASSIFICATION RULES:
-- Use ONLY the 5 canonical categories defined in the system prompt
-- Never create new categories or use sector/geography terms as categories
-- Map infrastructure sectors (transport/water/energy) to appropriate canonical categories
-- Put geography (Spain/Europe/LATAM/Africa) in tags/entities, NOT categories
+- Use ONLY the infrastructure taxonomy categories defined in the system prompt
+- Select 1-3 categories that best match the content's primary focus
+- Put geographic regions (Spain/Europe/LATAM/Africa) in tags/entities, NOT categories
 - Tags: 5-10 specific, professional terms, lower-case, hyphenated (e.g., "project-finance", "due-diligence", "ppp-contract")
 - Entities: Extract organizations, projects, technologies, locations (0-6 each), use canonical names
 
@@ -76,7 +112,7 @@ Special caps:
 - No clear source attribution: reduce score by 0.15
 
 Return JSON with exactly:
-- "categories": List of 1-3 canonical categories from system prompt
+- "categories": List of 1-3 infrastructure taxonomy categories from system prompt
 - "tags": List of 5-10 professional tags
 - "entities": Object with "organizations", "projects", "technologies", "locations" arrays
 - "publication_readiness": Score 0-1 for suitability in professional publications
@@ -87,6 +123,7 @@ Return strict JSON only."""
     cats = data.get('categories',[])
     tags = data.get('tags',[])
     ents = data.get('entities',{})
-    relevance = data.get('relevance_score', 0.5)
+    # Use publication_readiness as the relevance score for downstream processing
+    relevance = data.get('publication_readiness', 0.5)
     
     return cats, tags, ents

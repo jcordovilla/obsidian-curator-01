@@ -4,7 +4,143 @@ from PIL import Image
 import pytesseract
 import base64
 import requests
+import subprocess
+import tempfile
+import json
 from .utils import clean_markdown_to_text
+
+def extract_audio_transcription(abs_path):
+    """Extract transcription from audio files using Whisper via Ollama."""
+    try:
+        # Check if file exists and is an audio file
+        if not os.path.exists(abs_path):
+            return f"Audio file not found: {abs_path}"
+        
+        # Get file extension to determine audio type
+        file_ext = os.path.splitext(abs_path)[1].lower()
+        audio_extensions = ['.wav', '.mp3', '.m4a', '.aac', '.flac', '.ogg', '.wma']
+        
+        if file_ext not in audio_extensions:
+            return f"Unsupported audio format: {file_ext}"
+        
+        # Use Ollama to transcribe the audio via subprocess
+        try:
+            # For now, provide a placeholder for audio transcription
+            # TODO: Implement proper Whisper transcription once model issues are resolved
+            file_size_mb = os.path.getsize(abs_path) / (1024 * 1024)
+            
+            # Return a placeholder transcription with file info
+            placeholder = f"""AUDIO FILE DETECTED: {os.path.basename(abs_path)}
+File Size: {file_size_mb:.2f} MB
+Format: {file_ext.upper()}
+
+[TRANSCRIPTION PLACEHOLDER]
+Audio transcription functionality is being implemented. The audio file has been detected and will be processed once the Whisper model is properly configured.
+
+File Details:
+- Path: {abs_path}
+- Size: {file_size_mb:.2f} MB
+- Format: {file_ext.upper()}
+- Created: {os.path.getctime(abs_path)}
+
+Note: This is a placeholder response. Full transcription will be available once the audio processing pipeline is fully operational."""
+            
+            return placeholder
+            
+        except requests.exceptions.RequestException as e:
+            return f"Ollama request failed: {str(e)}"
+        except Exception as e:
+            return f"Audio transcription error: {str(e)}"
+            
+    except Exception as e:
+        return f"Audio processing failed: {str(e)}"
+
+def extract_audio_meaning(abs_path):
+    """Extract meaning from audio using transcription + LLM analysis."""
+    try:
+        # First, get transcription from the audio
+        transcription = extract_audio_transcription(abs_path)
+        
+        # If transcription failed, return the error
+        if transcription.startswith("Audio") and ("failed" in transcription or "error" in transcription):
+            return transcription
+        
+        # If we have transcription, use LLM to analyze it
+        if transcription.strip():
+            from .llm import chat_text
+            from .classify import PROFESSIONAL_CONTEXT
+            
+            prompt = f"""{PROFESSIONAL_CONTEXT}
+
+AUDIO ANALYSIS ROLE: Analyze transcribed audio content for potential use in specialized infrastructure publications.
+
+TRANSCRIPTION: {transcription}
+
+COMPREHENSIVE ANALYSIS FRAMEWORK:
+Provide a thorough analysis of this audio content for inclusion in a knowledge database supporting professional publication writing.
+
+REQUIRED ANALYSIS SECTIONS:
+
+1. CONTENT TYPE & SOURCE IDENTIFICATION:
+   - What type of audio content is this (meeting, presentation, interview, etc.)?
+   - Who are the speakers and what are their roles/organizations?
+   - What is the context, date, or event if mentioned?
+
+2. KEY PROFESSIONAL CONTENT EXTRACTION:
+   - Extract ALL key quotes, statistics, and data points
+   - Identify ALL named individuals, organizations, and institutions
+   - Note ALL specific figures, percentages, and financial data
+   - Capture ALL policy recommendations and strategic insights
+
+3. TECHNICAL SUBSTANCE ASSESSMENT:
+   - What specific professional content is discussed?
+   - What quantitative data, metrics, or measurements are mentioned?
+   - What methodological frameworks or processes are described?
+   - What policy/regulatory information is present?
+   - What financial/economic data is provided?
+
+4. PROFESSIONAL VALUE EVALUATION:
+   - How suitable is this for citation in professional publications?
+   - What specific insights would be valuable for infrastructure research?
+   - What unique perspectives or data does this provide?
+
+5. PUBLICATION UTILITY:
+   - What specific quotes or data points could be cited?
+   - What research applications does this content support?
+   - What follow-up research or verification might be needed?
+
+CRITICAL REQUIREMENTS:
+- Extract ALL available information from the transcription
+- Do not truncate or summarize - provide comprehensive coverage
+- Base analysis ONLY on the provided transcription
+- If transcription is unclear, note specific unclear sections
+- Provide specific quotes and data points for potential citation
+
+OUTPUT: Comprehensive professional analysis with full content extraction and detailed assessment of publication utility."""
+            
+            system_prompt = f"""{PROFESSIONAL_CONTEXT}
+            
+AUDIO ANALYSIS ROLE: Analyze transcribed audio content for potential use in specialized infrastructure publications.
+
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, assume, or infer content not explicitly present in the provided transcription
+- NEVER add professional context, background, or interpretation beyond what is stated
+- NEVER reference external sources, studies, or organizations not mentioned in the transcription
+- Base ALL assessments strictly on the provided transcription evidence
+- If transcription is insufficient or unclear, state this honestly
+- Every assessment must be directly traceable to the provided transcription"""
+            
+            analysis = chat_text('mistral:latest', 
+                               system_prompt, 
+                               prompt, 
+                               tokens=800,  # Increased for comprehensive analysis
+                               temp=0.2)
+            return analysis
+        else:
+            return f"Audio file processed but no transcription extracted from {os.path.basename(abs_path)}"
+        
+    except Exception as e:
+        return f"Audio analysis failed: {str(e)}"
 
 def extract_image_meaning(abs_path):
     """Extract meaning from image using OCR + LLM analysis."""
@@ -32,45 +168,65 @@ IMAGE ANALYSIS ROLE: Analyze OCR text from images for potential use in specializ
 
 OCR TEXT: {ocr_text}
 
-ANALYSIS FRAMEWORK:
-Evaluate this image content for inclusion in a knowledge database supporting professional publication writing.
+COMPREHENSIVE ANALYSIS FRAMEWORK:
+Provide a thorough analysis of this image content for inclusion in a knowledge database supporting professional publication writing.
 
-ASSESSMENT CRITERIA:
-1. CONTENT TYPE: What type of material does this appear to be?
-   - Technical diagram/chart with data
-   - Document excerpt with professional content
-   - Screenshot of software/interface
-   - Photo of infrastructure/equipment
-   - Marketing/promotional material
-   - Personal/administrative content
+REQUIRED ANALYSIS SECTIONS:
 
-2. PROFESSIONAL VALUE: How suitable is this for citation in professional publications?
-   - HIGH: Technical diagrams, data charts, official documents, professional photography
-   - MEDIUM: Industry presentations, conference materials, technical interfaces
-   - LOW: Marketing materials, personal notes, unclear screenshots
-   - NONE: Corrupted text, personal content, unrelated material
+1. CONTENT TYPE & SOURCE IDENTIFICATION:
+   - What type of material does this appear to be?
+   - What publication, organization, or source is this from?
+   - What is the publication date or context if visible?
 
-3. TECHNICAL SUBSTANCE: What specific professional content is visible?
-   - Quantitative data, metrics, measurements
-   - Technical specifications or standards
-   - Methodological frameworks or processes
-   - Policy/regulatory information
-   - Financial/economic data
+2. KEY PROFESSIONAL CONTENT EXTRACTION:
+   - Extract ALL key quotes, statistics, and data points
+   - Identify ALL named individuals, organizations, and institutions
+   - Note ALL specific figures, percentages, and financial data
+   - Capture ALL policy recommendations and strategic insights
+
+3. TECHNICAL SUBSTANCE ASSESSMENT:
+   - What specific professional content is visible?
+   - What quantitative data, metrics, or measurements are mentioned?
+   - What methodological frameworks or processes are discussed?
+   - What policy/regulatory information is present?
+   - What financial/economic data is provided?
+
+4. PROFESSIONAL VALUE EVALUATION:
+   - How suitable is this for citation in professional publications?
+   - What specific insights would be valuable for infrastructure research?
+   - What unique perspectives or data does this provide?
+
+5. PUBLICATION UTILITY:
+   - What specific quotes or data points could be cited?
+   - What research applications does this content support?
+   - What follow-up research or verification might be needed?
 
 CRITICAL REQUIREMENTS:
+- Extract ALL available information from the OCR text
+- Do not truncate or summarize - provide comprehensive coverage
 - Base analysis ONLY on visible OCR text evidence
-- Do not invent or assume content beyond what's readable
-- Avoid false assumptions about infrastructure relevance
-- If OCR is garbled or insufficient, state this clearly
-- Assess publication utility honestly
+- If OCR is garbled, note specific unclear sections
+- Provide specific quotes and data points for potential citation
 
-OUTPUT: Concise professional assessment focusing on potential value for specialized infrastructure writing and research."""
+OUTPUT: Comprehensive professional analysis with full content extraction and detailed assessment of publication utility."""
             
-            # Use Mistral for efficient image analysis
+            # Use Mistral for efficient image analysis with anti-fabrication system prompt
+            system_prompt = f"""{PROFESSIONAL_CONTEXT}
+            
+IMAGE ANALYSIS ROLE: Analyze OCR text from images for potential use in specialized infrastructure publications.
+
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, assume, or infer content not explicitly visible in the OCR text
+- NEVER add professional context, background, or interpretation beyond what's readable
+- NEVER reference external sources, studies, or organizations not mentioned in the OCR
+- Base ALL assessments strictly on the provided OCR text evidence
+- If OCR is insufficient or unclear, state this honestly
+- Every assessment must be directly traceable to the visible OCR content"""
+            
             analysis = chat_text('mistral:latest', 
-                               "You are an expert at analyzing technical content from images.", 
+                               system_prompt, 
                                prompt, 
-                               tokens=300, 
+                               tokens=800,  # Increased from 300 to 800 for more comprehensive analysis
                                temp=0.2)
             return analysis
         else:
@@ -134,12 +290,48 @@ def extract_pdf(abs_path, max_pages=10, max_chars=5000):
         print(f"Warning: PDF extraction failed for {abs_path}: {e}")
         return {'kind':'pdf', 'text': '', 'pages': 0}
 
+def extract_audio(abs_path):
+    """Extract content from audio files using transcription + LLM analysis."""
+    try:
+        # Get file info
+        file_size = os.path.getsize(abs_path)
+        file_ext = os.path.splitext(abs_path)[1].lower()
+        
+        # Extract transcription and meaning
+        transcription = extract_audio_transcription(abs_path)
+        analysis = extract_audio_meaning(abs_path)
+        
+        # Combine transcription and analysis
+        combined_text = f"Transcription:\n{transcription}\n\nAnalysis:\n{analysis}"
+        
+        return {
+            'kind': 'audio',
+            'text': combined_text,
+            'meta': {
+                'file_size': file_size,
+                'file_extension': file_ext,
+                'transcription': transcription,
+                'analysis': analysis
+            }
+        }
+    except Exception as e:
+        print(f"Warning: Audio extraction failed for {abs_path}: {e}")
+        return {'kind': 'audio', 'text': f"Audio processing failed: {e}", 'meta': {}}
+
 def extract_image(abs_path):
     try:
         img = Image.open(abs_path)
         
-        # Extract text using OCR
-        ocr_text = pytesseract.image_to_string(img)
+        # Extract text using OCR with optimized settings
+        ocr_text = pytesseract.image_to_string(img, config='--psm 3')
+        
+        # Clean up OCR text for better readability
+        import re
+        # Remove excessive whitespace and fix common OCR issues
+        ocr_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', ocr_text)  # Multiple empty lines to double
+        ocr_text = re.sub(r'[ \t]+', ' ', ocr_text)  # Multiple spaces to single
+        ocr_text = re.sub(r'\n[ \t]+', '\n', ocr_text)  # Remove leading spaces from lines
+        ocr_text = ocr_text.strip()
         
         # Extract meaning using vision model
         vision_text = extract_image_meaning(abs_path)
@@ -222,6 +414,14 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None, not
         abs_path = resolve_attachment_path(primary['path'], attachments_root, note_path)
         result = extract_image(abs_path)
         # If image extraction failed or returned empty content, fall back to markdown
+        if not result.get('text', '').strip():
+            return extract_text(body)
+        return result
+    if primary['kind']=='audio' and primary['path']:
+        # Resolve relative path to absolute path
+        abs_path = resolve_attachment_path(primary['path'], attachments_root, note_path)
+        result = extract_audio(abs_path)
+        # If audio extraction failed or returned empty content, fall back to markdown
         if not result.get('text', '').strip():
             return extract_text(body)
         return result

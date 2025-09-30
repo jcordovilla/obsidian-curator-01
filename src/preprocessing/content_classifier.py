@@ -52,6 +52,16 @@ class ContentClassifier:
                 'required_score': 2,
                 'weight': 0.8
             },
+            'audio_annotation': {
+                'indicators': [
+                    'has_audio_attachment',
+                    'has_attachment_reference',
+                    'short_content',
+                    'no_source_url'
+                ],
+                'required_score': 2,
+                'weight': 0.9
+            },
             'news_article': {
                 'indicators': [
                     'has_news_tags',
@@ -132,6 +142,7 @@ class ContentClassifier:
         # Attachment analysis
         indicators['has_attachment_reference'] = '![[attachments/' in content
         indicators['has_pdf_attachment'] = '.pdf' in content.lower()
+        indicators['has_audio_attachment'] = any(ext in content.lower() for ext in ['.wav', '.mp3', '.m4a', '.aac', '.flac', '.ogg', '.wma'])
         indicators['no_attachments'] = not indicators['has_attachment_reference']
         
         # Structure analysis

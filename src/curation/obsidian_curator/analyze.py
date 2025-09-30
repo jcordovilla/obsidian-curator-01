@@ -85,17 +85,37 @@ def calculate_content_richness(text, title, meta):
     final_richness = min(1.0, length_richness + structure_score)
     return final_richness
 
-def get_llm_relevance_score(text, title, cfg):
+def get_llm_relevance_score(text, title, meta, cfg):
     """Use LLM to assess professional relevance for publication-ready content."""
     
     # Truncate text for LLM processing
     text_sample = text[:3000] if len(text) > 3000 else text
     
+    # Extract metadata for better credibility assessment
+    source = meta.get('source', 'Not specified')
+    language = meta.get('language', 'Unknown')
+    date_created = meta.get('date created', 'Unknown')
+    date_modified = meta.get('date modified', 'Unknown')
+    
     prompt = f"""{PROFESSIONAL_CONTEXT}
 
 RELEVANCE ANALYSIS ROLE: Evaluate content for inclusion in a specialized knowledge database supporting professional publication writing.
 
-TITLE: {title}
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, assume, or infer content not explicitly present in the provided text
+- NEVER add professional context, background, or interpretation beyond what is stated
+- NEVER reference external sources, studies, or organizations not mentioned in the text
+- Base ALL assessments strictly on the provided document metadata and content
+- If content is insufficient for proper evaluation, state this honestly
+- Every assessment must be directly traceable to the source material
+
+DOCUMENT METADATA:
+Title: {title}
+Source: {source}
+Language: {language}
+Created: {date_created}
+Modified: {date_modified}
+
 CONTENT: {text_sample}
 
 EVALUATION DIMENSIONS:
@@ -135,7 +155,19 @@ Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "depth": 0.xx, "reasoning
 
     try:
         result = chat_json(cfg['models']['fast'], 
-                          system="You are an expert evaluator for professional knowledge curation. Return strict JSON only.",
+                          system=f"""{PROFESSIONAL_CONTEXT}
+                          
+EXPERT EVALUATOR ROLE: You are an expert evaluator for professional knowledge curation.
+
+CRITICAL ANTI-FABRICATION RULES:
+- NEVER invent, assume, or infer content not explicitly present in the provided text
+- NEVER add professional context, background, or interpretation beyond what is stated
+- NEVER reference external sources, studies, or organizations not mentioned in the text
+- Base ALL assessments strictly on the provided document metadata and content
+- If content is insufficient for proper evaluation, state this honestly
+- Every assessment must be directly traceable to the source material
+
+Return strict JSON only.""",
                           user=prompt, 
                           tokens=400, 
                           temp=0.3)  # Higher temperature for more creative relevance reasoning
@@ -164,7 +196,7 @@ def analyze_features(content, meta, cfg, relevance_score=None):
     embedding = embed_text(text, cfg['models']['embed']) if text else None
     
     # Get LLM-based professional relevance assessment
-    llm_scores = get_llm_relevance_score(text, title, cfg)
+    llm_scores = get_llm_relevance_score(text, title, meta, cfg)
     
     features = {
         'length_chars': len(text),

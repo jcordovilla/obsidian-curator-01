@@ -218,8 +218,8 @@ def get_curation_config():
             ]
         },
         'decision': {
-            'keep_threshold': 0.58,  # Balanced threshold - triaged notes should pass
-            'gray_margin': 0.15      # Balanced gray zone for manual review (0.43-0.58 = triage)
+            'keep_threshold': 0.55,  # Lowered threshold to allow policy/academic content to pass
+            'gray_margin': 0.15      # Balanced gray zone for manual review (0.40-0.55 = triage)
         },
         'priorities': ["pdf","image","text"],
         'summaries': {

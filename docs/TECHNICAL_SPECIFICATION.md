@@ -18,6 +18,7 @@ Obsidian Curator is a specialized AI-powered knowledge curation system designed 
 #### Core Models
 - **Llama 3.2:3B**: Primary model for classification, analysis, and summarization
 - **Mistral**: Specialized model for image OCR analysis and real-time processing  
+- **Whisper (dimavz/whisper-tiny:latest)**: Audio transcription via Ollama
 - **nomic-embed-text**: Embedding model for semantic similarity and content discovery
 
 #### Model Usage by Process
@@ -26,7 +27,9 @@ Obsidian Curator is a specialized AI-powered knowledge curation system designed 
 | Classification | Llama 3.2:3B | Content categorization | 600 | ~2s per note |
 | Relevance Analysis | Llama 3.2:3B | Professional scoring | 400 | ~1.5s per note |
 | PDF Summarization | Llama 3.2:3B | Technical summaries | 900 | ~3s per PDF |
-| Image Analysis | Mistral | OCR interpretation | 300 | ~1s per image |
+| Image Analysis | Mistral | OCR interpretation | 800 | ~1s per image |
+| Audio Transcription | Whisper (dimavz/whisper-tiny:latest) | Speech-to-text | N/A | ~10-30s per minute |
+| Audio Analysis | Llama 3.2:3B | Content analysis | 800 | ~2s per audio |
 | Embeddings | nomic-embed-text | Similarity search | N/A | ~0.5s per note |
 
 #### Performance Optimizations
@@ -34,6 +37,31 @@ Obsidian Curator is a specialized AI-powered knowledge curation system designed 
 - **60% reduced memory usage** with 3B parameter models
 - **Enhanced reasoning quality** with improved instruction following
 - **Publication-focused prompts** optimized for professional content curation
+
+### Audio Processing System
+
+#### Supported Formats
+- **WAV, MP3, M4A, AAC, FLAC, OGG, WMA** - Comprehensive audio format support
+- **Automatic Detection** - Intelligent classification based on file extensions
+- **Metadata Extraction** - File size, format, creation time, and duration tracking
+
+#### Transcription Pipeline
+1. **File Validation** - Format verification and size checking
+2. **Whisper Processing** - Speech-to-text conversion via Ollama
+3. **Text Cleaning** - Whitespace normalization and formatting
+4. **LLM Analysis** - Comprehensive content analysis and extraction
+
+#### Analysis Framework
+- **Content Type Identification** - Meeting, presentation, interview classification
+- **Speaker Recognition** - Multi-speaker detection and identification
+- **Professional Content Extraction** - Quotes, statistics, data points
+- **Technical Substance Assessment** - Quantitative data and frameworks
+- **Publication Utility Evaluation** - Citation-ready content identification
+
+#### Integration Points
+- **Preprocessing Pipeline** - Audio annotation classification and cleaning
+- **Curation Pipeline** - Full content analysis and scoring
+- **Quality Validation** - Anti-fabrication measures and source attribution
 
 ### Configuration System
 

@@ -421,7 +421,62 @@ def remove_boilerplate_sections(content_lines: List[str]) -> List[str]:
             'views',
             'life',
             'services',
-            'pt.'
+            'pt.',
+            # Academic website patterns
+            'skip to main content',
+            'subscribe',
+            'media',
+            'open calls',
+            'login',
+            'conferences',
+            'affiliated scholars',
+            'search',
+            'home',
+            'research',
+            'books & chapters',
+            'share',
+            'twitter',
+            'linkedin',
+            'email',
+            'these are preliminary drafts',
+            'this page will be updated',
+            'conference held',
+            'publisher:',
+            'table of contents',
+            'comment',
+            'author(s):',
+            'related',
+            'topics',
+            'programs',
+            'more from',
+            'working papers',
+            'disseminates',
+            'affiliates',
+            'latest findings',
+            'free periodicals',
+            'reporter',
+            'digest',
+            'bulletin on',
+            'online conference reports',
+            'video lectures',
+            'interviews',
+            'economics of digitization',
+            'article',
+            'lecture',
+            'summer institute',
+            'methods lectures',
+            'differential privacy',
+            'extent to which individual responses',
+            'household surveys',
+            'protected from discovery',
+            'outside parties depends',
+            'national bureau of economic research',
+            'contact us',
+            'massachusetts ave',
+            'cambridge',
+            'follow',
+            'homepage',
+            'all rights reserved'
         ]):
             # Skip this section until we find a clear end or another main heading
             skip_section = True
@@ -903,6 +958,40 @@ def apply_enhanced_cleaning(content: str) -> str:
         r'^\s*\.\s*$',
         r'^\s*[|\-\s]+\s*$',
         r'^\s*\*\s*\*\s*\*\s*$',
+        
+        # Academic website patterns (NBER, etc.)
+        r'^\s*\[Skip to main content\]\([^)]+\)\s*$',
+        r'^\s*\[Subscribe\]\([^)]+\)\s*$',
+        r'^\s*\[Media\]\([^)]+\)\s*$',
+        r'^\s*\[Open Calls\]\([^)]+\)\s*$',
+        r'^\s*\[Login.*\]\([^)]+\)\s*$',
+        r'^\s*\[Conferences\]\([^)]+\)\s*$',
+        r'^\s*\[Affiliated Scholars\]\([^)]+\)\s*$',
+        r'^\s*Search\s*$',
+        r'^\s*\[Home\]\([^)]+\)\s*$',
+        r'^\s*\[Research\]\([^)]+\)\s*$',
+        r'^\s*\[Books & Chapters\]\([^)]+\)\s*$',
+        r'^\s*Share\s*$',
+        r'^\s*\[Twitter.*\]\([^)]+\)\s*$',
+        r'^\s*\[LinkedIn.*\]\([^)]+\)\s*$',
+        r'^\s*\[Email.*\]\([^)]+\)\s*$',
+        r'^\s*These are preliminary drafts.*\s*$',
+        r'^\s*This page will be updated.*\s*$',
+        r'^\s*CONFERENCE HELD.*\s*$',
+        r'^\s*PUBLISHER:.*\s*$',
+        r'^\s*## Table of Contents\s*$',
+        r'^\s*## Related\s*$',
+        r'^\s*### Topics\s*$',
+        r'^\s*### Programs\s*$',
+        r'^\s*## More from.*\s*$',
+        r'^\s*In addition to.*working papers.*\s*$',
+        r'^\s*National Bureau of Economic Research\s*$',
+        r'^\s*\[Contact Us\]\([^)]+\)\s*$',
+        r'^\s*1050 Massachusetts Ave\.\s*$',
+        r'^\s*Cambridge, MA 02138\s*$',
+        r'^\s*Follow\s*$',
+        r'^\s*\[Homepage\]\([^)]+\)\s*$',
+        r'^\s*© \d{4}.*All Rights Reserved\.\s*$',
     ]
     
     compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in enhanced_patterns]
@@ -916,25 +1005,25 @@ def apply_enhanced_cleaning(content: str) -> str:
             continue
         
         # Check against enhanced patterns
-        should_remove = False
-        for pattern in compiled_patterns:
-            if pattern.match(line_stripped):
-                should_remove = True
-                break
-        
+            should_remove = False
+            for pattern in compiled_patterns:
+                if pattern.match(line_stripped):
+                    should_remove = True
+                    break
+            
         # Additional checks for link-heavy lines
-        if not should_remove:
-            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
-            word_count = len(line_stripped.split())
+            if not should_remove:
+                link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+                word_count = len(line_stripped.split())
             if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
                 nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe', 'latest', 'leaders', 'briefing', 'united', 'states', 'americas', 'asia', 'china', 'europe', 'britain', 'international', 'business', 'finance', 'economics', 'science', 'technology', 'books', 'arts', 'obituary', 'special', 'reports', 'technology', 'quarterly', 'debates']
                 nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
                 if nav_count > 0:
                     should_remove = True
-        
-        # Keep the line if it doesn't match removal patterns
-        if not should_remove:
-            cleaned_lines.append(line)
+            
+            # Keep the line if it doesn't match removal patterns
+            if not should_remove:
+                cleaned_lines.append(line)
     
     # Join and clean up
     cleaned_content = '\n'.join(cleaned_lines)

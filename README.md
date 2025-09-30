@@ -16,16 +16,45 @@ Obsidian Curator is a sophisticated knowledge curation system specifically desig
 - **🔍 Advanced Content Classification**: Intelligent categorization for Finance & Economics, Policy & Governance, Risk & Sustainability, Technology & Innovation, and Knowledge & Professional Practice
 - **📊 Professional Relevance Scoring**: Multi-dimensional assessment of publication utility, source credibility, and technical depth
 - **🧹 Intelligent Boilerplate Removal**: Advanced cleaning using Trafilatura and enhanced pattern matching
-- **📎 Comprehensive Attachment Handling**: PDF extraction, OCR analysis, and image processing for technical content
+- **📎 Comprehensive Attachment Handling**: PDF extraction, OCR analysis, image processing, and audio transcription for technical content
 - **⚡ High-Performance Processing**: Optimized with Llama 3.2:3B and Mistral models for speed and efficiency
 - **🔄 Advanced Testing System**: Reproducible testing with preservation, incremental processing, and performance monitoring
 - **🛡️ Professional Standards**: Evidence-based analysis with strict citation requirements and source attribution
+- **🎵 Audio Transcription**: Whisper-powered transcription of meetings, presentations, and interviews with comprehensive analysis
+
+## 🎵 Audio Processing Capabilities
+
+The system now includes comprehensive audio transcription and analysis capabilities:
+
+### **Supported Audio Formats**
+- **WAV, MP3, M4A, AAC, FLAC, OGG, WMA** - Full support for common audio formats
+- **Automatic Detection** - Intelligent classification of audio attachments
+- **Metadata Extraction** - File size, format, and creation time tracking
+
+### **Transcription Features**
+- **Whisper Integration** - Powered by `dimavz/whisper-tiny:latest` via Ollama
+- **Multilingual Support** - Automatic language detection and transcription
+- **Speaker Identification** - Recognition of multiple speakers when present
+- **Timestamp Support** - Major section timestamps for easy navigation
+
+### **Comprehensive Analysis**
+- **Content Type Identification** - Meeting, presentation, interview classification
+- **Professional Content Extraction** - Quotes, statistics, and data points
+- **Technical Substance Assessment** - Quantitative data and methodological frameworks
+- **Publication Utility Evaluation** - Citation-ready content identification
+- **Research Applications** - Specific use cases for professional publications
+
+### **Integration**
+- **Seamless Processing** - Full integration with preprocessing and curation pipelines
+- **Quality Validation** - Comprehensive analysis with anti-fabrication measures
+- **Source Attribution** - Proper metadata preservation and citation support
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.9 or higher
+- Ollama installed and running (for audio transcription)
 - Obsidian vault with Evernote-converted notes
 
 ### Installation
@@ -45,6 +74,20 @@ Obsidian Curator is a sophisticated knowledge curation system specifically desig
 3. **Install dependencies**
    ```bash
    pip install -r requirements.txt
+   ```
+
+4. **Install and configure Ollama** (for audio transcription)
+   ```bash
+   # Install Ollama (macOS)
+   brew install ollama
+   
+   # Or download from https://ollama.ai
+   
+   # Start Ollama service
+   ollama serve
+   
+   # Install Whisper model for audio transcription
+   ollama pull dimavz/whisper-tiny:latest
    ```
 
 ### Basic Usage

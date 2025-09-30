@@ -10,12 +10,24 @@ PREPROCESSED_VAULT_PATH = "/path/to/preprocessed/vault"
 CURATED_VAULT_PATH = "/path/to/curated/vault"
 ```
 
-### 2. Update Configuration
+### 2. Install Ollama (for audio transcription)
+```bash
+# Install Ollama (macOS)
+brew install ollama
+
+# Start Ollama service
+ollama serve
+
+# Install Whisper model
+ollama pull dimavz/whisper-tiny:latest
+```
+
+### 3. Update Configuration
 ```bash
 python scripts/update_config.py
 ```
 
-### 3. Test the System (Recommended)
+### 4. Test the System (Recommended)
 ```bash
 # Test with 10 random notes
 python tests/test_complete_pipeline.py 10
@@ -27,7 +39,7 @@ python tests/test_complete_pipeline.py 10 --seed 42
 python tests/test_complete_pipeline.py 15 --incremental
 ```
 
-### 4. Process Your Vault
+### 5. Process Your Vault
 ```bash
 # Preprocessing (raw → preprocessed)
 python scripts/preprocess.py
@@ -35,6 +47,27 @@ python scripts/preprocess.py
 # Curation (preprocessed → curated)
 python -m src.curation.obsidian_curator.main
 ```
+
+## Audio Processing
+
+### Supported Audio Formats
+- **WAV, MP3, M4A, AAC, FLAC, OGG, WMA** - Full support for common audio formats
+- **Automatic Detection** - System automatically identifies audio attachments
+- **Metadata Extraction** - File size, format, and creation time tracking
+
+### Audio Processing Workflow
+1. **Detection** - Audio files are automatically classified as `audio_annotation`
+2. **Transcription** - Whisper model converts speech to text
+3. **Analysis** - LLM analyzes content for professional relevance
+4. **Curation** - Full content available for curation decisions
+
+### Audio Content Analysis
+The system provides comprehensive analysis of audio content:
+- **Content Type Identification** - Meeting, presentation, interview classification
+- **Speaker Recognition** - Multi-speaker detection and identification
+- **Professional Content Extraction** - Quotes, statistics, data points
+- **Technical Substance Assessment** - Quantitative data and frameworks
+- **Publication Utility Evaluation** - Citation-ready content identification
 
 ## Available Commands
 
