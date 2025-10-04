@@ -248,51 +248,14 @@ class WebClippingCleaner:
         return metadata
     
     def is_web_clipping(self, content: str, frontmatter: Dict) -> bool:
-        """Determine if content is a web clipping that needs cleaning (not just referenced content)."""
-        # Use the same sophisticated logic as clean_html_like_clipping
+        """Determine if content is a web clipping that needs cleaning."""
+        # Simple and general: if it has a URL source, it's a web clipping
         if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
-            content_lower = content.lower()
-            
-            # Strong indicators of web clipping (not just referenced content)
-            web_scraping_indicators = [
-                # HTML structure
-                '<div', '<span', '<p class=', '<img', '<a href=',
-                # Navigation elements
-                'menu', 'navigation', 'breadcrumb', 'sidebar',
-                # Social/sharing elements  
-                'share this', 'follow us', 'subscribe', 'newsletter',
-                # Advertisement indicators
-                'advertisement', 'sponsored', 'ad server',
-                # Common web boilerplate
-                'cookie policy', 'privacy policy', 'terms of service',
-                'all rights reserved', 'copyright',
-                # Publication-specific indicators
-                'most viewed', 'most read', 'related articles',
-                'read more', 'continue reading'
-            ]
-            
-            # Count indicators present in content
-            indicator_count = sum(1 for indicator in web_scraping_indicators 
-                                if indicator in content_lower)
-            
-            # Check content structure
-            lines = content.split('\n')
-            short_lines = sum(1 for line in lines if 0 < len(line.strip()) < 30)
-            total_lines = len([line for line in lines if line.strip()])
-            
-            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', content))
-            word_count = len(content.split())
-            
-            # Determine if this is a web clipping based on multiple factors
-            return (
-                indicator_count >= 2 or  # Multiple web indicators
-                (total_lines > 10 and short_lines / total_lines > 0.4) or  # Many short lines
-                (word_count > 50 and link_count / word_count > 0.1)  # High link density
-            )
-        else:
-            # No URL source - check for HTML content in body
-            web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
-            return any(indicator in content.lower() for indicator in web_indicators)
+            return True
+        
+        # Also check for HTML content in body (even without URL source)
+        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
+        return any(indicator in content.lower() for indicator in web_indicators)
 
 def convert_html_tables_to_markdown(content: str) -> str:
     """Convert HTML tables to Markdown tables."""
@@ -730,8 +693,8 @@ def extract_content_with_trafilatura_v2(markdown_content: str) -> Optional[str]:
             include_images=False,
             include_links=True,
             include_formatting=True,
-            favor_precision=True,  # Favor precision over recall
-            favor_recall=False
+            favor_precision=False,  # Favor recall to extract content from navigation-heavy pages
+            favor_recall=True
         )
         
         if not extracted_html or len(extracted_html.strip()) < 100:
@@ -782,11 +745,138 @@ def extract_content_with_readability_v2(markdown_content: str) -> Optional[str]:
 def apply_enhanced_cleaning(content: str) -> str:
     """Apply enhanced cleaning patterns based on investigation findings."""
     lines = content.split('\n')
-    cleaned_lines = []
     
-    # Enhanced patterns for better boilerplate removal
+    # Step 0: Find where the actual article content starts
+    # Article content usually has a substantial title/heading followed by paragraphs
+    article_start_idx = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Look for article title patterns: heading or substantial text
+        is_heading = stripped.startswith('#')
+        is_substantial = len(stripped) > 50
+        
+        if is_heading or is_substantial:
+            # Check if this looks like an article title (not navigation)
+            nav_keywords = ['sections', 'blogs', 'media', 'keep updated', 'classified', 'apps', 'publications', 
+                          'welcome', 'your account', 'subscribe', 'login', 'menu', 'search', 'home', 'contact',
+                          'manage your', 'renew your', 'buy a gift', 'newsletters', 'log out', 'sign in']
+            if any(keyword in stripped.lower() for keyword in nav_keywords):
+                continue  # Skip navigation lines
+            
+            # Check if there's substantial content after this (paragraphs)
+            substantial_paragraphs = 0
+            for j in range(i+1, min(i+15, len(lines))):
+                line_content = lines[j].strip()
+                # Count lines with substantial text (not just links or navigation)
+                if len(line_content) > 60 and not line_content.startswith('*') and not line_content.startswith('['):
+                    substantial_paragraphs += 1
+                    if substantial_paragraphs >= 2:  # At least 2 substantial paragraphs
+                        article_start_idx = i
+                        break
+            
+            if article_start_idx > 0:
+                break
+    
+    # If we found article start, discard everything before it
+    if article_start_idx > 0:
+        lines = lines[article_start_idx:]
+    
+    # Step 0.5: Find where ads/sponsored content starts and truncate there
+    # These sections typically appear after the article content
+    ad_section_triggers = [
+        r'^\s*[Tt]e\s+puede\s+interesar\s*$',
+        r'^\s*[Oo]utbrain\s*$',
+        r'^\s*\*\*[Cc]ontenido\s+[Pp]atrocinado\*\*\s*$',
+        r'^\s*\*\*[Ss]ponsored\s+[Cc]ontent\*\*\s*$',
+        r'^\s*[Oo]tras\s+[Nn]oticias\s*$',
+        r'^\s*[Rr]elated\s+[Aa]rticles?\s*$',
+        r'^\s*[Mm]ore\s+[Ff]rom\s+',
+        r'^\s*[Rr]ecomendado\s+por\s*$',
+        r'^\s*[Yy]ou\s+[Mm]ay\s+[Aa]lso\s+[Ll]ike\s*$',
+    ]
+    
+    ad_start_idx = None
+    for i, line in enumerate(lines):
+        if any(re.match(pattern, line.strip()) for pattern in ad_section_triggers):
+            ad_start_idx = i
+            break
+    
+    # If we found where ads start, truncate everything after
+    if ad_start_idx is not None and ad_start_idx > 10:  # Only if there's substantial content before
+        lines = lines[:ad_start_idx]
+    
+    # First pass: identify and remove entire navigation/ads/sponsored sections
+    # Section headers that should trigger block removal
+    nav_section_headers = [
+        # Navigation
+        r'^\s*#{1,3}\s*[Ss]ections\s*$',
+        r'^\s*#{1,3}\s*[Bb]logs\s*$',
+        r'^\s*#{1,3}\s*[Mm]edia\s*$',
+        r'^\s*#{1,3}\s*[Kk]eep\s+[Uu]pdated\s*$',
+        r'^\s*#{1,3}\s*[Cc]lassified\s+[Aa]ds\s*$',
+        r'^\s*#{1,3}\s*[Aa]pps\s+.*[Dd]igital.*[Ee]ditions\s*$',
+        r'^\s*#{1,3}\s*[Oo]ther\s+[Pp]ublications\s*$',
+        r'^\s*#{1,3}\s*[Ll]atest\s+[Uu]pdates\s*$',
+        r'^\s*#{1,3}\s*[Rr]elated\s+[Ss]tories\s*$',
+        # Ads and sponsored content
+        r'^\s*#{1,3}\s*[Rr]eaders.*[Ff]avou?rites\s*$',
+        r'^\s*[Oo]utbrain\s*$',
+        r'^\s*\*\*[Cc]ontenido\s+[Pp]atrocinado\*\*\s*$',
+        r'^\s*\*\*[Ss]ponsored\s+[Cc]ontent\*\*\s*$',
+        r'^\s*\*\*[Cc]ontenido\s+[Rr]ecomendado\*\*\s*$',
+        r'^\s*[Tt]e\s+[Pp]uede\s+[Ii]nteresar\s*$',
+        r'^\s*[Oo]tras\s+[Nn]oticias\s*$',
+        r'^\s*\[?[Rr]ecomendado\s+por\]?\s*$',
+    ]
+    
+    # Process lines and skip navigation blocks
+    cleaned_lines = []
+    in_nav_section = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check if this is a navigation section header
+        is_nav_header = any(re.match(pattern, line) for pattern in nav_section_headers)
+        
+        if is_nav_header:
+            # Skip this header and all following bullet points/links until next section
+            in_nav_section = True
+            i += 1
+            continue
+        
+        # Check if we're in a nav section and hit the end of it
+        if in_nav_section:
+            # Navigation section ends when we hit: another header, or substantial paragraph
+            is_header = re.match(r'^\s*#{1,6}\s+\w', line)
+            is_bullet = re.match(r'^\s*[\*\-]\s+\[', line)  # Bullet with link
+            is_link_only = re.match(r'^\s*<https?://', line)
+            is_ad_url = 'doubleclick.net' in line or 'adclick' in line or 'outbrain.com' in line
+            is_empty = not line.strip()
+            
+            if is_header and not any(re.match(pattern, line) for pattern in nav_section_headers):
+                # Real content header, exit nav section
+                in_nav_section = False
+            elif is_bullet or is_link_only or is_empty or is_ad_url:
+                # Still in navigation/ads, skip this line
+                i += 1
+                continue
+            elif len(line.strip()) > 50 and not line.strip().startswith('['):
+                # Substantial text that's not a link - probably real content
+                in_nav_section = False
+            else:
+                # Uncertain, skip and continue
+                i += 1
+                continue
+        
+        # If we're here, line is not part of navigation section
+        cleaned_lines.append(line)
+        i += 1
+    
+    # Second pass: remove remaining individual patterns
+    final_lines = []
     enhanced_patterns = [
-        # Navigation and menus - more comprehensive patterns
+        # Navigation and menus - comprehensive patterns
         r'^\s*#\s*[Ss]ections\s*$',
         r'^\s*#\s*[Bb]logs\s*$',
         r'^\s*#\s*[Aa]pps.*[Dd]igital.*[Ee]ditions\s*$',
@@ -953,6 +1043,19 @@ def apply_enhanced_cleaning(content: str) -> str:
         r'^\s*[Mm]anage\s+your\s+cookies.*$',
         r'^\s*[Aa]llow\s*$',
         
+        # Spanish footer patterns
+        r'^\s*©.*[Tt]odos\s+los\s+derechos\s+reservados.*$',
+        r'^\s*©.*[Rr]adio\s+[Pp]opular.*$',
+        r'^\s*©.*COPE.*$',
+        r'^\s*[Dd]eveloped\s+by\s+AGILE\s+CONTENT.*$',
+        r'^\s*\*\s*\|?\s*\[[Pp]ublicidad\].*$',
+        r'^\s*\*\s*\|?\s*\[[Cc]ontacta\].*$',
+        r'^\s*\*\s*\|?\s*\[[Aa]viso\s+[Ll]egal\].*$',
+        r'^\s*\*\s*\|?\s*\[[Pp]olítica\s+de\s+[Pp]rivacidad\].*$',
+        r'^\s*\*\s*\|?\s*\[[Pp]olítica\s+de\s+[Cc]ookies\].*$',
+        r'^\s*\*\s*\|?\s*\[[Pp]olíticas\s+de\s+[Cc]ookies\].*$',
+        r'^\s*\*\s*\|\s*$',
+        
         # Empty or separator lines
         r'^\s*$',
         r'^\s*\.\s*$',
@@ -996,37 +1099,47 @@ def apply_enhanced_cleaning(content: str) -> str:
     
     compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in enhanced_patterns]
     
-    for line in lines:
+    for line in cleaned_lines:
         line_stripped = line.strip()
         
         # Skip empty lines
         if not line_stripped:
-            cleaned_lines.append(line)
+            final_lines.append(line)
             continue
         
         # Check against enhanced patterns
-            should_remove = False
-            for pattern in compiled_patterns:
-                if pattern.match(line_stripped):
-                    should_remove = True
-                    break
-            
+        should_remove = False
+        for pattern in compiled_patterns:
+            if pattern.match(line_stripped):
+                should_remove = True
+                break
+        
+        # Check for general ad/tracking patterns
+        if not should_remove:
+            # General patterns that indicate ads or tracking
+            if any(pattern in line_stripped.lower() for pattern in [
+                'doubleclick.net', 'adclick', 'ad server',  # Ad servers
+                'utm_source', 'utm_medium', 'utm_campaign',  # Tracking parameters
+                'obOrigUrl', '?gclid=',  # More tracking
+            ]):
+                should_remove = True
+        
         # Additional checks for link-heavy lines
-            if not should_remove:
-                link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
-                word_count = len(line_stripped.split())
+        if not should_remove:
+            link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+            word_count = len(line_stripped.split())
             if word_count > 0 and link_count / word_count > 0.7:  # More than 70% links
                 nav_words = ['home', 'about', 'contact', 'search', 'menu', 'navigation', 'sections', 'most', 'read', 'viewed', 'commented', 'share', 'follow', 'subscribe', 'latest', 'leaders', 'briefing', 'united', 'states', 'americas', 'asia', 'china', 'europe', 'britain', 'international', 'business', 'finance', 'economics', 'science', 'technology', 'books', 'arts', 'obituary', 'special', 'reports', 'technology', 'quarterly', 'debates']
                 nav_count = sum(1 for word in nav_words if word.lower() in line_stripped.lower())
                 if nav_count > 0:
                     should_remove = True
-            
-            # Keep the line if it doesn't match removal patterns
-            if not should_remove:
-                cleaned_lines.append(line)
+        
+        # Keep the line if it doesn't match removal patterns
+        if not should_remove:
+            final_lines.append(line)
     
     # Join and clean up
-    cleaned_content = '\n'.join(cleaned_lines)
+    cleaned_content = '\n'.join(final_lines)
     cleaned_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_content)
     cleaned_content = cleaned_content.strip()
     
@@ -1037,77 +1150,43 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     """Enhanced web clipping cleaner using proper Trafilatura integration."""
     import re
     
-    # Check if this is a web clipping (not just a note with URL source)
+    # Simple general check: if it has a URL source or HTML tags, clean it
     is_web_clipping = False
-    
     if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
-        # URL source exists, but check if content shows signs of web scraping
-        content_lower = content.lower()
-        
-        # Strong indicators of web clipping (not just referenced content)
-        web_scraping_indicators = [
-            # HTML structure
-            '<div', '<span', '<p class=', '<img', '<a href=',
-            # Navigation elements
-            'menu', 'navigation', 'breadcrumb', 'sidebar',
-            # Social/sharing elements  
-            'share this', 'follow us', 'subscribe', 'newsletter',
-            # Advertisement indicators
-            'advertisement', 'sponsored', 'ad server',
-            # Common web boilerplate
-            'cookie policy', 'privacy policy', 'terms of service',
-            'all rights reserved', 'copyright',
-            # Publication-specific indicators
-            'most viewed', 'most read', 'related articles',
-            'read more', 'continue reading'
-        ]
-        
-        # Count indicators present in content
-        indicator_count = sum(1 for indicator in web_scraping_indicators 
-                            if indicator in content_lower)
-        
-        # Also check content structure - web clippings often have:
-        # - Many short lines (navigation/menu items)
-        # - High ratio of links to text
-        lines = content.split('\n')
-        short_lines = sum(1 for line in lines if 0 < len(line.strip()) < 30)
-        total_lines = len([line for line in lines if line.strip()])
-        
-        link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', content))
-        word_count = len(content.split())
-        
-        # Determine if this is a web clipping based on multiple factors
-        is_web_clipping = (
-            indicator_count >= 2 or  # Multiple web indicators
-            (total_lines > 10 and short_lines / total_lines > 0.4) or  # Many short lines
-            (word_count > 50 and link_count / word_count > 0.1)  # High link density
-        )
+        is_web_clipping = True
     else:
-        # No URL source - check for HTML content in body
+        # Check for HTML content in body
         web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
         is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
     
     if not is_web_clipping:
         return content
     
-    # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
-    extracted = extract_content_with_trafilatura_v2(content)
-    if extracted:
-        return extracted
+    # Check if content is heavily HTML-based or Markdown-based
+    # HTML indicators: <div, <span, <p class=, etc.
+    html_tag_count = len(re.findall(r'<(div|span|article|section|header|footer|nav|p class=)', content, re.IGNORECASE))
     
-    # Fallback to Readability
-    extracted = extract_content_with_readability_v2(content)
-    if extracted:
-        return extracted
+    # If heavily HTML-based, use Trafilatura/Readability
+    if html_tag_count > 5:
+        # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
+        extracted = extract_content_with_trafilatura_v2(content)
+        if extracted:
+            return extracted
+        
+        # Fallback to Readability
+        extracted = extract_content_with_readability_v2(content)
+        if extracted:
+            return extracted
+        
+        # If both fail for HTML content
+        if is_heavily_html_structured(content):
+            return clean_heavily_html_structured(content, frontmatter)
     
-    # If both fail, fall back to enhanced cleaning patterns
-    if is_heavily_html_structured(content):
-        return clean_heavily_html_structured(content, frontmatter)
-    
+    # For Markdown-based content (no/few HTML tags), skip Trafilatura and use pattern-based cleaning
     # Convert HTML tables to Markdown first
     content = convert_html_tables_to_markdown(content)
     
-    # Apply enhanced cleaning patterns
+    # Apply enhanced cleaning patterns (works well for Markdown navigation)
     cleaned_content = apply_enhanced_cleaning(content)
     
     return cleaned_content

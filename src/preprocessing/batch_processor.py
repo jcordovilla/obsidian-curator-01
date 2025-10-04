@@ -254,7 +254,9 @@ class BatchProcessor:
             original_content = content
             processed_content = content
             
-            if category == 'web_clipping' and self.web_cleaner.is_web_clipping(content, frontmatter):
+            # Clean any content that has a URL source (web clippings)
+            has_url_source = frontmatter.get('source', '').startswith(('http://', 'https://'))
+            if (category == 'web_clipping' or has_url_source) and self.web_cleaner.is_web_clipping(content, frontmatter):
                 try:
                     processed_content, cleaning_stats = self.web_cleaner.clean_web_clipping(content, frontmatter)
                     if cleaning_stats and cleaning_stats.get('removed_chars', 0) > 0:

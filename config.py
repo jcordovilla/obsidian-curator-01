@@ -189,8 +189,8 @@ def get_curation_config():
             'out_assets': CURATED_ATTACHMENTS_PATH
         },
         'models': {
-            'fast': 'llama3.2:3b',  # Upgraded to Llama 3.2:3B for better efficiency
-            'main': 'llama3.2:3b',
+            'fast': 'llama3.1:8b',  # Upgraded to Llama 3.1:8B for better multilingual support
+            'main': 'llama3.1:8b',
             'embed': 'nomic-embed-text'
         },
         'taxonomy': {
@@ -218,8 +218,8 @@ def get_curation_config():
             ]
         },
         'decision': {
-            'keep_threshold': 0.55,  # Lowered threshold to allow policy/academic content to pass
-            'gray_margin': 0.15      # Balanced gray zone for manual review (0.40-0.55 = triage)
+            'keep_threshold': 0.55,  # Threshold to keep high-value content
+            'gray_margin': 0.10      # Narrowed gray zone for manual review (0.45-0.55 = triage)
         },
         'priorities': ["pdf","image","text"],
         'summaries': {

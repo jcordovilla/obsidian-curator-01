@@ -1,0 +1,19 @@
+{
+  "summary": {
+    "total_files": 1,
+    "processed_files": 1,
+    "failed_files": 0,
+    "skipped_files": 0,
+    "success_rate": 1.0,
+    "processing_time": 0.0036399364471435547,
+    "files_per_second": 274.730071395821
+  },
+  "categories": {
+    "news_article": 1
+  },
+  "quality_distribution": {
+    "excellent": 1
+  },
+  "errors": [],
+  "timestamp": "2025-09-30T23:15:11.919424"
+}

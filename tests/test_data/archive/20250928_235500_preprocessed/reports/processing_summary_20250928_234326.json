@@ -1,0 +1,21 @@
+{
+  "summary": {
+    "total_files": 3,
+    "processed_files": 3,
+    "failed_files": 0,
+    "skipped_files": 0,
+    "success_rate": 1.0,
+    "processing_time": 0.042534828186035156,
+    "files_per_second": 70.53043653729738
+  },
+  "categories": {
+    "business_card": 1,
+    "pdf_annotation": 1,
+    "web_clipping": 1
+  },
+  "quality_distribution": {
+    "excellent": 3
+  },
+  "errors": [],
+  "timestamp": "2025-09-28T23:43:26.633805"
+}

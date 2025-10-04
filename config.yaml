@@ -1,12 +1,12 @@
 decision:
-  gray_margin: 0.15
+  gray_margin: 0.10
   keep_threshold: 0.55
 language:
   default: auto
 models:
   embed: nomic-embed-text
-  fast: llama3.2:3b
-  main: llama3.2:3b
+  fast: llama3.1:8b
+  main: llama3.1:8b
 paths:
   attachments: /Users/jose/Documents/Obsidian/Evermd/attachments
   curated_attachments: /Users/jose/Documents/Obsidian/Ever-curated/attachments

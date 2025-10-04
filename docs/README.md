@@ -1,22 +1,43 @@
 # Documentation
 
-This folder contains essential documentation for the Obsidian Curator project.
+This folder contains comprehensive documentation for the Obsidian Curator project.
 
-## Files
+## Core Documentation
 
-- **`USAGE.md`** - Complete usage guide with examples and troubleshooting
-- **`TECHNICAL_SPECIFICATION.md`** - Comprehensive technical documentation for coding LLMs
-- **`analysis_output/`** - Analysis results and data files
-  - `analysis_report.md` - Human-readable analysis summary
-  - `content_analysis.json` - Detailed analysis data
-  - `technical_characterization.json` - Technical specifications
-  - `sample_dataset.yaml` - Sample dataset for testing
-  - `coding_agent_brief.md` - Technical brief for developers
+- **[TECHNICAL_SPECIFICATION.md](TECHNICAL_SPECIFICATION.md)** - Complete technical specification including architecture, AI models, module structure, and API reference
+- **[USAGE.md](USAGE.md)** - Detailed usage guide with examples and troubleshooting
+- **[FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md)** - Vault structure and folder organization
+
+## Analysis Output
+
+The `analysis_output/` directory contains sample analysis results:
+- `analysis_report.md` - Human-readable analysis summary
+- `content_analysis.json` - Detailed analysis data
+- `technical_characterization.json` - Technical specifications
+- `sample_dataset.yaml` - Sample dataset for testing
+- `coding_agent_brief.md` - Technical brief for AI coding assistants
 
 ## Quick Reference
 
-- **Main documentation**: See the root `README.md`
-- **Usage examples**: See `USAGE.md`
-- **Analysis results**: See `analysis_output/` folder
+### Configuration
+- Primary config: `../config.py` (single source of truth)
+- Auto-generated: `../config.yaml` (synced from config.py)
+- Models: Llama 3.1:8B (main), Mistral (image), Whisper (audio)
 
-For the most up-to-date information, always refer to the main project `README.md` in the root directory.
+### Decision Thresholds
+- **Keep**: Score ≥ 0.55
+- **Triage**: Score 0.45-0.55 (manual review)
+- **Discard**: Score < 0.45
+
+### Scoring Components
+- **Relevance**: 50% (professional value for infrastructure writing)
+- **Depth**: 30% (technical substance and detail)
+- **Richness**: 20% (content structure and indicators)
+- **Credibility**: 0% (disabled due to multilingual issues)
+
+## Additional Resources
+
+For the most up-to-date information, always refer to:
+- Main README: `../README.md`
+- Configuration: `../config.py`
+- Test examples: `../tests/test_data/`

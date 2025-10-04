@@ -153,6 +153,14 @@ def extract_image_meaning(abs_path):
         if width < 100 or height < 100:
             return f"Small image ({width}x{height}px) - likely an icon or thumbnail"
         
+        # Resize large images to avoid processing failures
+        max_dimension = 2000
+        if max(img.size) > max_dimension:
+            ratio = max_dimension / max(img.size)
+            new_size = tuple(int(dim * ratio) for dim in img.size)
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            width, height = img.size
+        
         ocr_text = pytesseract.image_to_string(img)
         
         # If OCR found text, use LLM to analyze it
@@ -321,6 +329,15 @@ def extract_audio(abs_path):
 def extract_image(abs_path):
     try:
         img = Image.open(abs_path)
+        
+        # Resize large images to avoid processing failures
+        max_dimension = 2000
+        if max(img.size) > max_dimension:
+            print(f"Resizing large image: {img.size} -> ", end='')
+            ratio = max_dimension / max(img.size)
+            new_size = tuple(int(dim * ratio) for dim in img.size)
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            print(f"{img.size}")
         
         # Extract text using OCR with optimized settings
         ocr_text = pytesseract.image_to_string(img, config='--psm 3')

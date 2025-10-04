@@ -16,27 +16,27 @@ Obsidian Curator is a specialized AI-powered knowledge curation system designed 
 ### AI Models & Performance
 
 #### Core Models
-- **Llama 3.2:3B**: Primary model for classification, analysis, and summarization
-- **Mistral**: Specialized model for image OCR analysis and real-time processing  
+- **Llama 3.1:8B**: Primary model for classification, analysis, and summarization with strong multilingual support (especially Spanish/English)
+- **Mistral**: Specialized model for image OCR analysis
 - **Whisper (dimavz/whisper-tiny:latest)**: Audio transcription via Ollama
 - **nomic-embed-text**: Embedding model for semantic similarity and content discovery
 
 #### Model Usage by Process
-| Process | Model | Purpose | Token Limit | Performance |
-|---------|-------|---------|-------------|-------------|
-| Classification | Llama 3.2:3B | Content categorization | 600 | ~2s per note |
-| Relevance Analysis | Llama 3.2:3B | Professional scoring | 400 | ~1.5s per note |
-| PDF Summarization | Llama 3.2:3B | Technical summaries | 900 | ~3s per PDF |
-| Image Analysis | Mistral | OCR interpretation | 800 | ~1s per image |
-| Audio Transcription | Whisper (dimavz/whisper-tiny:latest) | Speech-to-text | N/A | ~10-30s per minute |
-| Audio Analysis | Llama 3.2:3B | Content analysis | 800 | ~2s per audio |
+| Process | Model | Purpose | Token Limit | Notes |
+|---------|-------|---------|-------------|-------|
+| Classification | Llama 3.1:8B | Content categorization | 600 | Multilingual support |
+| Relevance Analysis | Llama 3.1:8B | Professional scoring | 400 | No credibility scoring |
+| PDF Summarization | Llama 3.1:8B | Technical summaries | 900 | ~3s per PDF |
+| Image Analysis | Mistral | OCR interpretation | 800 | Auto-resizes large images |
+| Audio Transcription | Whisper (tiny) | Speech-to-text | N/A | ~10-30s per minute |
+| Audio Analysis | Llama 3.1:8B | Content analysis | 800 | ~2s per audio |
 | Embeddings | nomic-embed-text | Similarity search | N/A | ~0.5s per note |
 
-#### Performance Optimizations
-- **75% faster processing** compared to previous 8B models
-- **60% reduced memory usage** with 3B parameter models
-- **Enhanced reasoning quality** with improved instruction following
-- **Publication-focused prompts** optimized for professional content curation
+#### Key Features
+- **Multilingual Support**: Superior performance on Spanish and English content
+- **Publication-focused prompts**: Optimized for professional content curation
+- **Local Processing**: All models run locally via Ollama for privacy and control
+- **Anti-fabrication measures**: Strict rules to prevent content hallucination
 
 ### Audio Processing System
 
@@ -74,8 +74,8 @@ CURATED_VAULT_PATH = "/Users/jose/Documents/Obsidian/Ever-curated"
 
 # AI Models configuration
 MODELS = {
-    'fast': 'llama3.2:3b',
-    'main': 'llama3.2:3b', 
+    'fast': 'llama3.1:8b',  # Upgraded for multilingual support
+    'main': 'llama3.1:8b', 
     'embed': 'nomic-embed-text'
 }
 ```

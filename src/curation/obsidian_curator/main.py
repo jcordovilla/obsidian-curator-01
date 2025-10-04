@@ -53,6 +53,12 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             primary = choose_primary(assets, body, cfg['priorities'])
             content = extract_content(primary, assets, body, meta.get('language'), attachments, note_path)
             
+            # CRITICAL: Validate content before any scoring
+            text = content.get('text', '').strip()
+            if not text or len(text) < 50:
+                logger.info(f'DISCARD: {note_path} (insufficient content: {len(text)} chars)')
+                continue
+            
             # Early classification to get relevance score for better filtering
             cats, tags, ents = classify_json(content, meta, cfg)
             

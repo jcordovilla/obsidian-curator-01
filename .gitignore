@@ -134,18 +134,23 @@ backup/
 temp/
 tmp/
 .DS_Store
+**/.DS_Store
 .vscode/
 .idea/
 .metadata/
 curated/
 logs/
+analysis_output/
 
 # Output directories
 output/
 processed/
 results/
 
-# Test outputs
+# Test outputs (but keep tests/test_data/)
 test_output/
-test_data/
 performance_test_results_*.json
+
+# Python cache
+**/__pycache__/
+*.pyc

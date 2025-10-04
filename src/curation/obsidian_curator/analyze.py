@@ -71,15 +71,33 @@ def calculate_content_richness(text, title, meta):
     if text.count('\n\n') > 2:  # Has paragraphs
         structure_score += 0.1
     
-    # Check for professional content indicators
-    professional_indicators = [
+    # Check for professional content indicators (MULTILINGUAL)
+    professional_indicators_en = [
         'analysis', 'report', 'study', 'research', 'project', 'investment',
         'infrastructure', 'finance', 'governance', 'risk', 'management',
         'technology', 'development', 'strategy', 'policy', 'regulation'
     ]
     
-    if any(indicator in text_lower for indicator in professional_indicators):
-        structure_score += 0.2
+    professional_indicators_es = [
+        'análisis', 'informe', 'estudio', 'investigación', 'proyecto', 'inversión',
+        'infraestructura', 'infraestructuras', 'financiación', 'concesión', 'concesiones',
+        'licitación', 'millones', 'contrato', 'contratos', 'obra', 'obras',
+        'ministerio', 'presupuesto', 'presupuestos', 'tarifa', 'tarifas', 'gestión',
+        'política', 'regulación', 'desarrollo', 'estrategia', 'riesgo'
+    ]
+    
+    # Combine based on language
+    language = meta.get('language', 'en')
+    if language == 'es':
+        indicators = professional_indicators_es
+        # Boost Spanish structured content recognition
+        structure_multiplier = 1.3
+    else:
+        indicators = professional_indicators_en
+        structure_multiplier = 1.0
+    
+    if any(indicator in text_lower for indicator in indicators):
+        structure_score += 0.3 * structure_multiplier  # Increased from 0.2
     
     # Combine length and structure
     final_richness = min(1.0, length_richness + structure_score)
@@ -99,7 +117,7 @@ def get_llm_relevance_score(text, title, meta, cfg):
     
     prompt = f"""{PROFESSIONAL_CONTEXT}
 
-RELEVANCE ANALYSIS ROLE: Evaluate content for inclusion in a specialized knowledge database supporting professional publication writing.
+RELEVANCE ANALYSIS ROLE: Evaluate content for inclusion in a specialized knowledge database supporting infrastructure investment research, analysis, and professional writing.
 
 CRITICAL ANTI-FABRICATION RULES:
 - NEVER invent, assume, or infer content not explicitly present in the provided text
@@ -119,14 +137,13 @@ Modified: {date_modified}
 CONTENT: {text_sample}
 
 EVALUATION DIMENSIONS:
-Rate each dimension (0-1) based on suitability for professional publications:
+Rate each dimension (0-1) based on knowledge value for infrastructure investment professionals:
 
-1. PROFESSIONAL RELEVANCE: How valuable is this for infrastructure investment publications?
-   - PUBLICATION-READY (0.8-1.0): Primary sources, research reports, technical analysis, case studies with concrete data
-   - PROFESSIONALLY USEFUL (0.6-0.79): Expert commentary, sector analysis, methodological frameworks
-   - BACKGROUND VALUE (0.4-0.59): General industry information, basic concepts, contextual material  
-   - LIMITED VALUE (0.2-0.39): Tangentially related content, marketing materials, news without analysis
-   - NO VALUE (0.0-0.19): Personal notes, unrelated content, corrupted data
+1. PROFESSIONAL RELEVANCE: How valuable is this knowledge for infrastructure investment professionals?
+   - HIGHLY VALUABLE (0.7-1.0): Industry news, expert opinions, policy developments, case studies, technical analysis, market intelligence, regulatory updates, strategic frameworks, sector trends
+   - USEFUL KNOWLEDGE (0.5-0.69): General sector information, background context, conceptual frameworks, educational content, methodological insights
+   - MARGINAL VALUE (0.3-0.49): Tangential content with some connection to infrastructure, basic definitions only, outdated news
+   - NO VALUE (0.0-0.29): Personal content (to-do lists, travel diaries, personal reflections), software tutorials (unless infrastructure-specific), corrupted/placeholder content
 
 2. SOURCE CREDIBILITY: How trustworthy and authoritative is the source?
    - AUTHORITATIVE (0.8-1.0): Government agencies, established research institutions, peer-reviewed sources
@@ -142,14 +159,20 @@ Rate each dimension (0-1) based on suitability for professional publications:
    - SUPERFICIAL (0.2-0.39): High-level overview, minimal detail, mostly descriptive
    - INSUFFICIENT (0.0-0.19): No technical substance, only headlines/summaries
 
-CRITICAL EXCLUSIONS (automatic 0.0-0.2 scores):
-- Personal documents, bills, to-do lists, reminders
-- Software manuals, user guides (unless infrastructure-specific)
-- Marketing materials, company websites, promotional content
-- Corrupted files, placeholder content, navigation elements
-- News headlines without analysis or expert commentary
+CRITICAL EXCLUSIONS (automatic 0.0-0.3 scores):
+- Personal documents: to-do lists, reminders, travel diaries, personal reflections unrelated to infrastructure
+- Software tutorials: installation guides, technical how-tos (unless infrastructure-specific tools)
+- Corrupted/placeholder content: navigation elements, empty content, ad clutter
 
-CONTEXT: Content will be used to support writing of academic papers, industry reports, investment analyses, and policy briefings. Prioritize material that provides citable evidence, concrete data, and professional insights.
+VALUE FOR KNOWLEDGE DISTILLATION:
+Content is valuable if it helps professionals:
+- Understand industry trends and developments
+- Learn about specific projects, policies, or regulatory changes
+- Gain insights from experts or practitioners
+- Access case studies, frameworks, or methodologies
+- Track market intelligence and competitive landscape
+
+CONTEXT: Content will be used to support research, analysis, writing, and decision-making in infrastructure investment. Value knowledge that informs understanding, even if not immediately publication-ready.
 
 Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "depth": 0.xx, "reasoning": "concise explanation focusing on publication utility"}}"""
 
@@ -214,11 +237,13 @@ def analyze_features(content, meta, cfg, relevance_score=None):
 def score_usefulness(feats, cfg):
     """Score usefulness using LLM-assessed professional relevance for publications."""
     # Publication-focused weights - emphasize relevance and depth for citation quality
-    w = dict(relevance=0.45, credibility=0.25, depth=0.20, richness=0.10)
+    # NOTE: Credibility disabled due to systematic failures with non-English sources
+    # Redistributed weight to relevance (0.50), depth (0.30), richness (0.20)
+    w = dict(relevance=0.50, credibility=0.00, depth=0.30, richness=0.20)
     
     # Weighted combination optimized for publication utility
     score = (w['relevance'] * feats['relevance'] +
-             w['credibility'] * feats['credibility'] +
+             # w['credibility'] * feats['credibility'] +  # DISABLED
              w['depth'] * feats['depth'] +
              w['richness'] * feats['richness'])
     

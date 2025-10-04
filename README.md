@@ -14,10 +14,10 @@ Obsidian Curator is a sophisticated knowledge curation system specifically desig
 - **🎯 Publication-Focused Curation**: AI-powered content analysis optimized for specialized infrastructure research and writing
 - **📚 Citation-Ready Summaries**: Professional abstracts, technical contributions, and quotable excerpts
 - **🔍 Advanced Content Classification**: Intelligent categorization for Finance & Economics, Policy & Governance, Risk & Sustainability, Technology & Innovation, and Knowledge & Professional Practice
-- **📊 Professional Relevance Scoring**: Multi-dimensional assessment of publication utility, source credibility, and technical depth
+- **📊 Professional Relevance Scoring**: Multi-dimensional assessment of publication utility and technical depth
 - **🧹 Intelligent Boilerplate Removal**: Advanced cleaning using Trafilatura and enhanced pattern matching
 - **📎 Comprehensive Attachment Handling**: PDF extraction, OCR analysis, image processing, and audio transcription for technical content
-- **⚡ High-Performance Processing**: Optimized with Llama 3.2:3B and Mistral models for speed and efficiency
+- **⚡ High-Performance Processing**: Optimized with Llama 3.1:8B for multilingual support and accurate content assessment
 - **🔄 Advanced Testing System**: Reproducible testing with preservation, incremental processing, and performance monitoring
 - **🛡️ Professional Standards**: Evidence-based analysis with strict citation requirements and source attribution
 - **🎵 Audio Transcription**: Whisper-powered transcription of meetings, presentations, and interviews with comprehensive analysis
@@ -206,24 +206,25 @@ The system uses a clear three-stage folder structure:
 The system uses optimized local AI models for maximum performance and privacy:
 
 ### **Core Models**
-- **Llama 3.2:3B**: Primary model for classification, analysis, and summarization
-- **Mistral**: Specialized model for image OCR analysis and real-time processing
-- **nomic-embed-text**: Embedding model for semantic similarity and content discovery
-
-### **Performance Optimizations**
-- **75% faster processing** compared to previous models
-- **60% reduced memory usage** with 3B parameter models
-- **Enhanced reasoning quality** with improved instruction following
-- **Publication-focused prompts** optimized for professional content curation
+- **Llama 3.1:8B**: Primary model for classification, analysis, and summarization with strong multilingual support
+- **Mistral**: Specialized model for image OCR analysis
+- **Whisper (tiny)**: Audio transcription via Ollama
+- **nomic-embed-text**: Embedding model for semantic similarity
 
 ### **Model Usage by Process**
-| Process | Model | Purpose | Performance |
-|---------|-------|---------|-------------|
-| Classification | Llama 3.2:3B | Content categorization | 600 tokens |
-| Relevance Analysis | Llama 3.2:3B | Professional scoring | 400 tokens |
-| PDF Summarization | Llama 3.2:3B | Technical summaries | 900 tokens |
-| Image Analysis | Mistral | OCR interpretation | 300 tokens |
-| Embeddings | nomic-embed-text | Similarity search | N/A |
+| Process | Model | Token Limit | Notes |
+|---------|-------|-------------|-------|
+| Classification | Llama 3.1:8B | 600 | Multilingual categorization |
+| Relevance Analysis | Llama 3.1:8B | 400 | Professional scoring |
+| PDF Summarization | Llama 3.1:8B | 900 | Technical summaries |
+| Image Analysis | Mistral | 800 | OCR + vision analysis |
+| Audio Transcription | Whisper | N/A | Speech-to-text |
+| Embeddings | nomic-embed-text | N/A | Similarity search |
+
+### **Key Features**
+- **Multilingual Support**: Excellent performance on Spanish and English content
+- **Publication-focused prompts**: Optimized for professional content curation
+- **Local Processing**: All models run locally for privacy and control
 
 ## 🔧 Configuration
 
