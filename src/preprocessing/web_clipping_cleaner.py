@@ -987,6 +987,85 @@ def apply_enhanced_cleaning(content: str) -> str:
         r'^\s*[Pp]assword\s*$',
         r'^\s*[Kk]eep\s+me\s+logged\s+in\s*$',
         r'^\s*\[.*[Ff]orgot\s+password.*\]\([^)]+\)\s*$',
+        
+        # Skip links and accessibility navigation (NEW)
+        r'^\s*[Jj]ump\s+to:\s*$',
+        r'^\s*-\s*\[\[#.*\|.*[Ss]kip\s+to.*\]\]\s*$',
+        r'^\s*\[.*[Ss]kip\s+to\s+.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Aa]ccessibility.*\]\([^)]+\)\s*$',
+        
+        # DoubleClick and advertisement content (NEW)
+        r'^\s*\[!\[\[.*\]\]\]\(http://ad\.uk\.doubleclick\.net/.*\)\s*$',
+        r'^\s*<a\s+href="http://ad\.doubleclick\.net/.*".*>\s*$',
+        r'^\s*<img\s+src="http://ad\.doubleclick\.net/.*".*>\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://ad\.uk\.doubleclick\.net/click.*\)\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://s0\.2mdn\.net/.*\)\s*$',
+        r'^\s*<img\s+src="http://s0\.2mdn\.net/.*".*>\s*$',
+        
+        # Footer and site navigation (NEW)
+        r'^\s*#\s*\[.*[Ww]ind\s+[Ii]ndustry\s+[Jj]obs.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ww]ind\s+[Pp]ark\s+[Dd]esign.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Tt]echnical\s+[Pp]rocurement.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]ngineer.*[Cc]ivil\s+[Ww]orks.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Ee]ngineer.*[Ww]ind\s+[Tt]urbine.*\]\([^)]+\)\s*$',
+        r'^\s*\[RSS\s+feed\]\([^)]+\)\s*$',
+        r'^\s*\[Search\s+for\s+jobs.*\]\([^)]+\)\s*$',
+        
+        # Social media and newsletter signup (NEW)
+        r'^\s*#\s*\[NEWS\s+BY\s+EMAIL\]\([^)]+\)\s*$',
+        r'^\s*\*\*.*[Ww]eekly.*\*\*.*[Pp]review.*$',
+        r'^\s*\*\*.*[Dd]aily.*\*\*.*[Pp]review.*$',
+        r'^\s*\*\*.*[Oo]ffshore.*\*\*.*[Pp]review.*$',
+        r'^\s*\[Register\s+here\]\([^)]+\)\s+for\s+free\s+bulletins\.\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://www\.twitter\.com/.*\)\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://www\.linkedin\.com/.*\)\s*$',
+        
+        # Directory and polls (NEW)
+        r'^\s*#\s*[Dd]irectory\s*$',
+        r'^\s*[Ff]ind\s+products,?\s+services\s+and\s+suppliers\s*$',
+        r'^\s*[Pp]roduct/Service\s*$',
+        r'^\s*[Cc]ompany\s*$',
+        r'^\s*#\s*[Pp]oll\s*$',
+        r'^\s*##\s*[Ww]ill\s+.*\?\s*$',
+        r'^\s*[Yy]es,?\s+.*\s*$',
+        r'^\s*[Nn]o,?\s+.*\s*$',
+        r'^\s*[Mm]aybe,?\s+.*\s*$',
+        
+        # Latest articles and related content (NEW)
+        r'^\s*##\s*[Ll]atest\s+[Tt]echnology\s+[Aa]rticles\s*$',
+        r'^\s*\*\s*\[.*[Mm]ing\s+[Yy]ang.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Mm]itsubishi.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Jj]apanese\s+government.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Gg]amesa.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[.*[Uu]K\s+government.*\]\([^)]+\)\s*$',
+        
+        # Copyright and legal footer (NEW)
+        r'^\s*\[Haymarket\]\([^)]+\)\s*$',
+        r'^\s*Haymarket\s+©\s+\d{4}\s*–\s+\d{4}\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://www\.haymarket\.com/.*\)\s*$',
+        r'^\s*\*\s*\[[Aa]bout\s+[Uu]s\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Cc]ontact\s+[Uu]s\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Ss]ubscribe\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Ff]ree\s+trial\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Ee]mail\s+bulletins\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Aa]dvertising\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Jj]obs\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Tt]erms\s+&\s+[Cc]onditions\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Pp]rivacy\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Aa]ccessibility\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Ss]itemap\]\([^)]+\)\s*$',
+        
+        # Partner websites and archive (NEW)
+        r'^\s*[Pp][Aa][Rr][Tt][Nn][Ee][Rr]\s+[Ww][Ee][Bb]\s+[Ss][Ii][Tt][Ee][Ss]\s*$',
+        r'^\s*\[.*[Ww]ind\s+[Ss]tats.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Ee][Nn][Dd][Ss]\s+[Ee]urope.*\]\([^)]+\)\s*$',
+        r'^\s*\[.*[Ww]ind\s+[Ii]ndustry\s+[Jj]obs.*\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Aa]rchive\]\([^)]+\)\s*$',
+        r'^\s*\*\s*\[[Ll]og\s+[Ii]n\]\([^)]+\)\s*$',
+        
+        # In This Issue section (NEW)
+        r'^\s*#\s*\[[Ii]n\s+[Tt]his\s+[Ii]ssue\]\([^)]+\)\s*$',
+        r'^\s*\[!\[\[.*\]\]\]\(http://www\.windpowermonthly\.com/go/subscribe/\)\s*$',
         r'^\s*[Nn]ew\s+to.*[Tt]he.*[Ee]conomist.*\?.*$',
         r'^\s*\[.*[Ss]ign\s+up\s+now.*\]\([^)]+\)\s*$',
         r'^\s*\[.*[Aa]ctivate.*[Dd]igital.*[Ss]ubscription.*\]\([^)]+\)\s*$',
@@ -1146,6 +1225,142 @@ def apply_enhanced_cleaning(content: str) -> str:
     return cleaned_content
 
 
+def remove_web_clipping_sections(content: str) -> str:
+    """Remove entire sections that are typical web clipping clutter."""
+    import re
+    
+    lines = content.split('\n')
+    cleaned_lines = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Skip links section - remove entire block
+        if re.match(r'^\s*[Jj]ump\s+to:\s*$', line):
+            # Skip this line and all following skip links
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*-\s*\[\[#.*\|.*[Ss]kip\s+to.*\]\]\s*$', lines[i]) or
+                re.match(r'^\s*\[.*[Ss]kip\s+to\s+.*\]\([^)]+\)\s*$', lines[i]) or
+                lines[i].strip() == ''
+            ):
+                i += 1
+            continue
+        
+        # Advertisement sections - remove entire blocks
+        if re.search(r'doubleclick\.net|s0\.2mdn\.net', line, re.IGNORECASE):
+            # Skip this line and following ad content
+            i += 1
+            while i < len(lines) and (
+                re.search(r'doubleclick\.net|s0\.2mdn\.net|ad\.|advertisement', lines[i], re.IGNORECASE) or
+                lines[i].strip().startswith('<a href=') or
+                lines[i].strip().startswith('<img') or
+                lines[i].strip() == ''
+            ):
+                i += 1
+            continue
+        
+        # Footer sections - remove entire blocks
+        if re.match(r'^\s*#\s*\[.*[Ww]ind\s+[Ii]ndustry\s+[Jj]obs.*\]\([^)]+\)\s*$', line):
+            # Skip entire jobs section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*\*\s*\[.*\]\([^)]+\)\s*$', lines[i]) or
+                re.match(r'^\s*\[.*\]\([^)]+\)\s*$', lines[i]) or
+                lines[i].strip() == '' or
+                'Competitive' in lines[i] or
+                'Salary dependent' in lines[i]
+            ):
+                i += 1
+            continue
+        
+        # News by email section
+        if re.match(r'^\s*#\s*\[NEWS\s+BY\s+EMAIL\]\([^)]+\)\s*$', line):
+            # Skip entire newsletter section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*\*\*.*\*\*.*[Pp]review.*$', lines[i]) or
+                re.match(r'^\s*\[.*\]\([^)]+\)\s*$', lines[i]) or
+                'Register here' in lines[i] or
+                'manage your bulletins' in lines[i].lower()
+            ):
+                i += 1
+            continue
+        
+        # Directory section
+        if re.match(r'^\s*#\s*[Dd]irectory\s*$', line):
+            # Skip entire directory section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*[Ff]ind\s+products', lines[i]) or
+                re.match(r'^\s*[Pp]roduct/Service\s*$', lines[i]) or
+                re.match(r'^\s*[Cc]ompany\s*$', lines[i]) or
+                lines[i].strip() == '' or
+                re.match(r'^\s*\[!\[\[.*\]\]\]\([^)]+\)\s*$', lines[i])
+            ):
+                i += 1
+            continue
+        
+        # Poll section
+        if re.match(r'^\s*#\s*[Pp]oll\s*$', line):
+            # Skip entire poll section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*##\s*[Ww]ill\s+.*\?\s*$', lines[i]) or
+                re.match(r'^\s*[Yy]es,?\s+.*\s*$', lines[i]) or
+                re.match(r'^\s*[Nn]o,?\s+.*\s*$', lines[i]) or
+                re.match(r'^\s*[Mm]aybe,?\s+.*\s*$', lines[i]) or
+                lines[i].strip() == '' or
+                re.search(r'doubleclick\.net|s0\.2mdn\.net', lines[i], re.IGNORECASE)
+            ):
+                i += 1
+            continue
+        
+        # Latest Technology Articles section
+        if re.match(r'^\s*##\s*[Ll]atest\s+[Tt]echnology\s+[Aa]rticles\s*$', line):
+            # Skip entire related articles section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*\*\s*\[.*\]\([^)]+\)\s*$', lines[i]) or
+                lines[i].strip() == '' or
+                lines[i].strip() == '\t'
+            ):
+                i += 1
+            continue
+        
+        # Copyright footer section
+        if re.match(r'^\s*\[Haymarket\]\([^)]+\)\s*$', line) or re.match(r'^\s*Haymarket\s+©', line):
+            # Skip entire footer section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*\*\s*\[.*\]\([^)]+\)\s*$', lines[i]) or
+                re.match(r'^\s*\[!\[\[.*\]\]\]\([^)]+\)\s*$', lines[i]) or
+                lines[i].strip() == '' or
+                'PARTNER WEB SITES' in lines[i] or
+                re.search(r'doubleclick\.net|s0\.2mdn\.net', lines[i], re.IGNORECASE)
+            ):
+                i += 1
+            continue
+        
+        # In This Issue section
+        if re.match(r'^\s*#\s*\[[Ii]n\s+[Tt]his\s+[Ii]ssue\]\([^)]+\)\s*$', line):
+            # Skip entire subscription section
+            i += 1
+            while i < len(lines) and (
+                re.match(r'^\s*\[!\[\[.*\]\]\]\([^)]+\)\s*$', lines[i]) or
+                re.search(r'doubleclick\.net|s0\.2mdn\.net', lines[i], re.IGNORECASE)
+            ):
+                i += 1
+            continue
+        
+        # Keep the line if it doesn't match any removal patterns
+        cleaned_lines.append(line)
+        i += 1
+    
+    return '\n'.join(cleaned_lines)
+
+
 def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     """Enhanced web clipping cleaner using proper Trafilatura integration."""
     import re
@@ -1166,21 +1381,31 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     # HTML indicators: <div, <span, <p class=, etc.
     html_tag_count = len(re.findall(r'<(div|span|article|section|header|footer|nav|p class=)', content, re.IGNORECASE))
     
-    # If heavily HTML-based, use Trafilatura/Readability
-    if html_tag_count > 5:
+    # Check for navigation clutter indicators (even in markdown)
+    navigation_clutter = len(re.findall(r'(share|facebook|twitter|linkedin|subscribe|newsletter|home|menu|search|contact|advertise|cookie|consent|policy|privacy|terms|legal|disclaimer|skip|jump|maincontent|mainnav|subnav|topnav|sitesearch|footer|doubleclick|ad\.|advertisement|banner)', content.lower()))
+    
+    # If heavily HTML-based OR has navigation clutter, use Trafilatura/Readability
+    if html_tag_count > 5 or navigation_clutter > 10:
         # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
         extracted = extract_content_with_trafilatura_v2(content)
         if extracted:
-            return extracted
+            # Apply section-based cleaning even after Trafilatura
+            cleaned_content = remove_web_clipping_sections(extracted)
+            return cleaned_content
         
         # Fallback to Readability
         extracted = extract_content_with_readability_v2(content)
         if extracted:
-            return extracted
+            # Apply section-based cleaning even after Readability
+            cleaned_content = remove_web_clipping_sections(extracted)
+            return cleaned_content
         
         # If both fail for HTML content
         if is_heavily_html_structured(content):
-            return clean_heavily_html_structured(content, frontmatter)
+            cleaned_content = clean_heavily_html_structured(content, frontmatter)
+            # Apply section-based cleaning
+            cleaned_content = remove_web_clipping_sections(cleaned_content)
+            return cleaned_content
     
     # For Markdown-based content (no/few HTML tags), skip Trafilatura and use pattern-based cleaning
     # Convert HTML tables to Markdown first
@@ -1188,5 +1413,8 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     
     # Apply enhanced cleaning patterns (works well for Markdown navigation)
     cleaned_content = apply_enhanced_cleaning(content)
+    
+    # Apply aggressive section-based cleaning for web clippings
+    cleaned_content = remove_web_clipping_sections(cleaned_content)
     
     return cleaned_content

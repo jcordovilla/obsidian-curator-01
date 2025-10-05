@@ -14,13 +14,14 @@ Obsidian Curator is a sophisticated knowledge curation system specifically desig
 - **🎯 Publication-Focused Curation**: AI-powered content analysis optimized for specialized infrastructure research and writing
 - **📚 Citation-Ready Summaries**: Professional abstracts, technical contributions, and quotable excerpts
 - **🔍 Advanced Content Classification**: Intelligent categorization for Finance & Economics, Policy & Governance, Risk & Sustainability, Technology & Innovation, and Knowledge & Professional Practice
-- **📊 Professional Relevance Scoring**: Multi-dimensional assessment of publication utility and technical depth
-- **🧹 Intelligent Boilerplate Removal**: Advanced cleaning using Trafilatura and enhanced pattern matching
+- **📊 Professional Relevance Scoring**: Single-pass LLM assessment focusing on knowledge reusability for professional writing and analysis
+- **🧹 Intelligent Boilerplate Removal**: Advanced cleaning using Trafilatura and enhanced pattern matching with section-based cleaning
 - **📎 Comprehensive Attachment Handling**: PDF extraction, OCR analysis, image processing, and audio transcription for technical content
 - **⚡ High-Performance Processing**: Optimized with Llama 3.1:8B for multilingual support and accurate content assessment
-- **🔄 Advanced Testing System**: Reproducible testing with preservation, incremental processing, and performance monitoring
+- **🔄 Advanced Testing System**: Reproducible testing with preservation, incremental processing, targeted testing, and partial pipeline runs
 - **🛡️ Professional Standards**: Evidence-based analysis with strict citation requirements and source attribution
 - **🎵 Audio Transcription**: Whisper-powered transcription of meetings, presentations, and interviews with comprehensive analysis
+- **📊 Comprehensive Analysis Tools**: Built-in preprocessing effectiveness analysis and note type diversity assessment
 
 ## 🎵 Audio Processing Capabilities
 
@@ -114,6 +115,15 @@ The system now includes comprehensive audio transcription and analysis capabilit
    
    # Incremental testing (preserves previous results)
    python tests/test_complete_pipeline.py 15 --incremental
+   
+   # Targeted testing on specific notes
+   python tests/test_complete_pipeline.py --notes "Note1.md" "Note2.md"
+   
+   # Partial pipeline testing (preprocessing only)
+   python tests/test_complete_pipeline.py --stages random preprocess
+   
+   # Curation only (requires existing preprocessed notes)
+   python tests/test_complete_pipeline.py --stages curate
    ```
 
 4. **Run preprocessing** (raw → preprocessed):
@@ -155,7 +165,8 @@ obsidian-curator-01/
 │   │   ├── quality_validator.py  # Quality assessment
 │   │   └── web_clipping_cleaner.py  # Boilerplate removal
 │   └── utils/                    # Utility functions
-│       └── file_handler.py       # File operations
+│       ├── file_handler.py       # File operations
+│       └── preprocessing_analyzer.py  # Comprehensive preprocessing analysis
 ├── scripts/                      # Executable scripts
 │   ├── main.py                   # Analysis and characterization
 │   ├── preprocess.py             # Main preprocessing script
@@ -331,6 +342,27 @@ python tests/test_complete_pipeline.py 25 --incremental
 python tests/test_complete_pipeline.py 20 --seed 456 --incremental
 ```
 
+#### **Targeted Testing**
+```bash
+# Test specific notes by filename
+python tests/test_complete_pipeline.py --notes "Note1.md" "Note2.md"
+
+# Test with full pipeline on specific notes
+python tests/test_complete_pipeline.py --notes "Note1.md" --stages random preprocess curate
+```
+
+#### **Partial Pipeline Testing**
+```bash
+# Preprocessing only
+python tests/test_complete_pipeline.py --stages random preprocess
+
+# Curation only (requires existing preprocessed notes)
+python tests/test_complete_pipeline.py --stages curate
+
+# Skip random selection, just preprocess existing notes
+python tests/test_complete_pipeline.py --stages preprocess
+```
+
 ### **Test Output Structure**
 ```
 tests/test_data/
@@ -406,6 +438,9 @@ python tests/test_folder_structure.py
 
 # Test preprocessing pipeline only
 python tests/test_preprocessing_pipeline.py
+
+# Comprehensive preprocessing analysis
+python src/utils/preprocessing_analyzer.py --sample-size 100
 ```
 
 ### Configuration Management

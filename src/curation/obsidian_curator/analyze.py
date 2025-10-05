@@ -190,17 +190,18 @@ Examples: "Generic project management tips", "Software vendor marketing"
 🔴 NO VALUE (0.00-0.24) - Discard, not reusable knowledge:
 • Personal timesheets: "Met with X", "Reviewed Y document", "Sent email to Z"
 • Administrative logs: daily activity lists, task tracking, meeting schedules WITHOUT insights
+• Old project-specific meeting notes (>5 years) with only logistics/scheduling, no sector insights
 • Personal receipts, invoices, bills, travel bookings
 • Software installation guides (unless infrastructure-specific tools)
 • Corrupted content, empty files, pure navigation elements
 • Unclear OCR text with garbled characters, random symbols, or nonsensical content
-Examples: "April 3rd - Finished PASTAS letter, emailed Brett, reviewed memo", "ai ail aD 4 ap ay i 12SDP KICK -oEE Me ERTNG"
+Examples: "April 3rd - Finished PASTAS letter, emailed Brett, reviewed memo", "ai ail aD 4 ap ay i 12SDP KICK -oEE Me ERTNG", "Land acquisition expected to start February 2015"
 
 IMPORTANT: Industry news about energy, transport, water, policy, etc. should score AT LEAST 0.45 (medium value). Only administrative/personal content should score below 0.25.
 
 CRITICAL: Personal notes WITH professional analysis/insights ARE valuable. Only discard administrative/logistical tracking.
 
-ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value from title alone.
+ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value from title alone. Do NOT infer professional expertise or project involvement from names, titles, or locations. Business cards, contact info, and personal details score LOW unless they contain substantial professional insights.
 
 Return JSON: {{"usefulness": 0.xx, "reasoning": "2-3 sentences explaining score based on knowledge reusability"}}"""
 

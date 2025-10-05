@@ -15,19 +15,28 @@ import config
 from src.preprocessing import BatchProcessor
 from src.curation.obsidian_curator.main import run
 
-def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
+def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None, 
+                         specific_notes=None, stages=['random', 'preprocess', 'curate']):
     """Test the complete pipeline: raw -> preprocessed -> curated.
     
     Args:
-        num_notes: Number of notes to test
+        num_notes: Number of notes to test (ignored if specific_notes provided)
         preserve_previous: If True, move previous results to dated backup folder
         seed: Optional random seed for reproducible results
+        specific_notes: List of specific note filenames to test (overrides random selection)
+        stages: List of pipeline stages to run ['random', 'preprocess', 'curate']
     """
-    print(f"Testing complete Obsidian Curator pipeline with {num_notes} notes...")
+    if specific_notes:
+        print(f"Testing specific notes: {', '.join(specific_notes)}")
+    else:
+        print(f"Testing complete Obsidian Curator pipeline with {num_notes} notes...")
+    
     if seed is not None:
         print(f"Using random seed: {seed}")
     if preserve_previous:
         print("Previous results will be preserved in dated folders")
+    
+    print(f"Pipeline stages: {', '.join(stages)}")
     print("=" * 60)
     
     # Get test configuration
@@ -43,11 +52,18 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
     print(f"Curated vault: {curated_vault}")
     print()
     
-    # Step 0: Randomly select and copy notes from real vault
-    print(f"Step 0: Randomly selecting {num_notes} fresh notes from real vault...")
-    print("-" * 40)
+    # Step 0: Select and copy notes from real vault
+    if 'random' in stages:
+        if specific_notes:
+            print(f"Step 0: Copying specific notes from real vault...")
+        else:
+            print(f"Step 0: Randomly selecting {num_notes} fresh notes from real vault...")
+        print("-" * 40)
+        
+        import random
+    else:
+        import random  # Still need random for seed setting
     
-    import random
     import shutil
     from datetime import datetime
     
@@ -170,13 +186,33 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
     print(f"Notes with attachments: {len(notes_with_attachments)}")
     print(f"Notes without attachments: {len(notes_without_attachments)}")
     
-    # TRUE RANDOM SELECTION: Sample from ALL notes regardless of attachments
-    # This fixes the selection bias that was causing repeated notes
-    if len(all_notes) < num_notes:
-        print(f"⚠️  Warning: Only {len(all_notes)} notes available, selecting all")
-        selected_notes = all_notes
+    # Select notes: either specific notes or random selection
+    if specific_notes:
+        # Find specific notes by filename
+        selected_notes = []
+        for note_name in specific_notes:
+            found = False
+            for note in all_notes:
+                if note.name == note_name:
+                    selected_notes.append(note)
+                    found = True
+                    break
+            if not found:
+                print(f"⚠️  Warning: Note '{note_name}' not found in vault")
+        
+        if not selected_notes:
+            print("❌ No specific notes found, aborting test")
+            return False
+            
+        print(f"Found {len(selected_notes)} of {len(specific_notes)} requested notes")
     else:
-        selected_notes = random.sample(all_notes, num_notes)
+        # TRUE RANDOM SELECTION: Sample from ALL notes regardless of attachments
+        # This fixes the selection bias that was causing repeated notes
+        if len(all_notes) < num_notes:
+            print(f"⚠️  Warning: Only {len(all_notes)} notes available, selecting all")
+            selected_notes = all_notes
+        else:
+            selected_notes = random.sample(all_notes, num_notes)
     
     # Report the mix we actually got
     selected_with_attachments = []
@@ -283,70 +319,76 @@ def test_complete_pipeline(num_notes=10, preserve_previous=True, seed=None):
     raw_vault = test_raw_vault
     
     # Step 1: Preprocessing
-    print("Step 1: Preprocessing raw notes...")
-    print("-" * 40)
+    if 'preprocess' in stages:
+        print("Step 1: Preprocessing raw notes...")
+        print("-" * 40)
     
-    # Count raw notes
-    raw_notes = list(Path(raw_vault).rglob("*.md"))
-    print(f"Found {len(raw_notes)} notes in raw vault")
-    
-    if len(raw_notes) == 0:
-        print("Error: No notes found in raw vault")
-        return False
-    
-    # Initialize batch processor
-    processor = BatchProcessor(
-        vault_path=raw_vault,
-        output_path=preprocessed_vault,
-        backup=False,
-        batch_size=10,
-        max_workers=2
-    )
-    
-    try:
-        # Process all selected notes (they're already selected and copied)
-        print(f"Processing all {len(selected_notes)} selected notes...")
-        results = processor.process_vault()
+        # Count raw notes
+        raw_notes = list(Path(raw_vault).rglob("*.md"))
+        print(f"Found {len(raw_notes)} notes in raw vault")
         
-        print(f"Preprocessing results:")
-        summary = results['summary']
-        print(f"  Files processed: {summary['processed_files']}")
-        print(f"  Successful: {summary['processed_files']}")
-        print(f"  Failed: {summary['failed_files']}")
-        print(f"  Skipped: {summary['skipped_files']}")
-        
-        if summary['processed_files'] == 0:
-            print("Error: Preprocessing failed - no notes were processed")
+        if len(raw_notes) == 0:
+            print("Error: No notes found in raw vault")
             return False
         
-        print("✓ Preprocessing completed successfully")
+        # Initialize batch processor
+        processor = BatchProcessor(
+            vault_path=raw_vault,
+            output_path=preprocessed_vault,
+            backup=False,
+            batch_size=10,
+            max_workers=2
+        )
         
-    except Exception as e:
-        print(f"Error during preprocessing: {e}")
-        return False
+        try:
+            # Process all selected notes (they're already selected and copied)
+            print(f"Processing all {len(selected_notes)} selected notes...")
+            results = processor.process_vault()
+            
+            print(f"Preprocessing results:")
+            summary = results['summary']
+            print(f"  Files processed: {summary['processed_files']}")
+            print(f"  Successful: {summary['processed_files']}")
+            print(f"  Failed: {summary['failed_files']}")
+            print(f"  Skipped: {summary['skipped_files']}")
+            
+            if summary['processed_files'] == 0:
+                print("Error: Preprocessing failed - no notes were processed")
+                return False
+            
+            print("✓ Preprocessing completed successfully")
+            
+        except Exception as e:
+            print(f"Error during preprocessing: {e}")
+            return False
+    else:
+        print("Skipping preprocessing stage")
     
     # Step 2: Curation
-    print("\nStep 2: Curation of preprocessed notes...")
-    print("-" * 40)
+    if 'curate' in stages:
+        print("\nStep 2: Curation of preprocessed notes...")
+        print("-" * 40)
     
-    # Count preprocessed notes
-    preprocessed_notes = list(Path(preprocessed_vault).rglob("*.md"))
-    print(f"Found {len(preprocessed_notes)} preprocessed notes")
-    
-    try:
-        # Run curation on preprocessed data
-        print("Running curation on preprocessed data...")
-        # Override the attachments path to use preprocessed attachments
-        run(test_cfg, 
-            vault=preprocessed_vault, 
-            attachments=test_cfg['paths']['test_preprocessed_attachments'], 
-            out_notes=test_cfg['paths']['test_curated_notes'], 
-            dry_run=False)
-        print("✓ Curation pipeline completed successfully")
+        # Count preprocessed notes
+        preprocessed_notes = list(Path(preprocessed_vault).rglob("*.md"))
+        print(f"Found {len(preprocessed_notes)} preprocessed notes")
         
-    except Exception as e:
-        print(f"Error during curation: {e}")
-        return False
+        try:
+            # Run curation on preprocessed data
+            print("Running curation on preprocessed data...")
+            # Override the attachments path to use preprocessed attachments
+            run(test_cfg, 
+                vault=preprocessed_vault, 
+                attachments=test_cfg['paths']['test_preprocessed_attachments'], 
+                out_notes=test_cfg['paths']['test_curated_notes'], 
+                dry_run=False)
+            print("✓ Curation pipeline completed successfully")
+            
+        except Exception as e:
+            print(f"Error during curation: {e}")
+            return False
+    else:
+        print("Skipping curation stage")
     
     # Step 3: Verify results
     print("\nStep 3: Verifying results...")
@@ -386,6 +428,12 @@ def main():
                        help='Don\'t preserve previous results (delete them)')
     parser.add_argument('--incremental', action='store_true',
                        help='Incremental mode: only test new notes, keep existing triage')
+    parser.add_argument('--notes', nargs='+', 
+                       help='Specific note filenames to test (overrides random selection)')
+    parser.add_argument('--stages', nargs='+', 
+                       choices=['random', 'preprocess', 'curate'], 
+                       default=['random', 'preprocess', 'curate'],
+                       help='Pipeline stages to run (default: all stages)')
     
     # Handle both old-style (positional) and new-style (argparse) arguments
     if len(sys.argv) == 2 and sys.argv[1].isdigit():
@@ -400,7 +448,8 @@ def main():
         print("🔄 Incremental mode: Testing new notes while preserving triage decisions")
         preserve_previous = True  # Force preservation in incremental mode
     
-    success = test_complete_pipeline(args.num_notes, preserve_previous, args.seed)
+    success = test_complete_pipeline(args.num_notes, preserve_previous, args.seed, 
+                                   specific_notes=args.notes, stages=args.stages)
     
     if success:
         print("\n🎉 Complete pipeline test passed!")

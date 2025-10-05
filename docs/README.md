@@ -7,6 +7,7 @@ This folder contains comprehensive documentation for the Obsidian Curator projec
 - **[TECHNICAL_SPECIFICATION.md](TECHNICAL_SPECIFICATION.md)** - Complete technical specification including architecture, AI models, module structure, and API reference
 - **[USAGE.md](USAGE.md)** - Detailed usage guide with examples and troubleshooting
 - **[FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md)** - Vault structure and folder organization
+- **[SCORING_SYSTEM.md](SCORING_SYSTEM.md)** - Detailed explanation of the simplified scoring system
 
 ## Analysis Output
 
@@ -25,15 +26,15 @@ The `analysis_output/` directory contains sample analysis results:
 - Models: Llama 3.1:8B (main), Mistral (image), Whisper (audio)
 
 ### Decision Thresholds
-- **Keep**: Score ≥ 0.55
-- **Triage**: Score 0.45-0.55 (manual review)
-- **Discard**: Score < 0.45
+- **Keep**: Score ≥ 0.45
+- **Triage**: Score 0.25-0.45 (manual review)
+- **Discard**: Score < 0.25
 
-### Scoring Components
-- **Relevance**: 50% (professional value for infrastructure writing)
-- **Depth**: 30% (technical substance and detail)
-- **Richness**: 20% (content structure and indicators)
-- **Credibility**: 0% (disabled due to multilingual issues)
+### Scoring System
+- **Single-Pass LLM Assessment**: Focuses on knowledge reusability for professional writing
+- **Scoring Range**: 0.00-1.00 with 4 tiers (High, Medium, Low, No Value)
+- **Context-Aware**: Considers content types (personal logs, web clips, technical guides, etc.)
+- **Anti-Hallucination**: Prevents over-interpretation of business cards and contact info
 
 ## Additional Resources
 

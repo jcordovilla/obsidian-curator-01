@@ -295,6 +295,8 @@ MODELS = {
 - **Reproducible Testing**: Optional seed for consistent results
 - **Preservation System**: Timestamped archives of previous test results
 - **Incremental Testing**: Test new notes without losing previous work
+- **Targeted Testing**: Test specific notes by filename
+- **Partial Pipeline Testing**: Run individual stages (random, preprocess, curate)
 - **Performance Monitoring**: Track processing speed and quality metrics
 - **Flexible Configuration**: Command-line options for different testing scenarios
 
@@ -311,6 +313,15 @@ python tests/test_complete_pipeline.py 15 --incremental
 
 # Clean slate testing (delete previous results)
 python tests/test_complete_pipeline.py 10 --no-preserve
+
+# Targeted testing on specific notes
+python tests/test_complete_pipeline.py --notes "Note1.md" "Note2.md"
+
+# Partial pipeline testing (preprocessing only)
+python tests/test_complete_pipeline.py --stages random preprocess
+
+# Curation only (requires existing preprocessed notes)
+python tests/test_complete_pipeline.py --stages curate
 ```
 
 #### Test Output Structure
@@ -332,6 +343,28 @@ tests/test_data/
 - **Quality Metrics**: Monitor curation accuracy and consistency
 - **Resource Usage**: Memory and processing time optimization
 - **Decision Analysis**: Review keep/triage/discard patterns
+
+### `src/utils/preprocessing_analyzer.py`
+**Purpose**: Comprehensive preprocessing effectiveness analysis
+**Key Features**:
+- **Large Sample Analysis**: Analyze 100+ random notes from source vault
+- **Note Type Diversity**: Categorize notes (web clipping, PDF, image, text, etc.)
+- **Clutter Pattern Analysis**: Identify common boilerplate and navigation elements
+- **Preprocessing Effectiveness**: Test cleaning on sample and measure reduction
+- **Recommendation Generation**: Propose improvements based on remaining clutter
+- **Statistical Reporting**: Detailed metrics on preprocessing performance
+
+#### Usage
+```bash
+# Analyze 100 random notes
+python src/utils/preprocessing_analyzer.py --sample-size 100
+
+# Custom output file
+python src/utils/preprocessing_analyzer.py --output my_analysis.json
+
+# Help and options
+python src/utils/preprocessing_analyzer.py --help
+```
 
 ## Data Flow
 
