@@ -35,12 +35,18 @@ class NoteTypeTester:
         
     def setup_logging(self):
         """Setup logging for the tester."""
+        # Ensure logs directory exists
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
+        
+        log_filename = logs_dir / f'note_type_test_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.StreamHandler(),
-                logging.FileHandler(f'note_type_test_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+                logging.FileHandler(log_filename)
             ]
         )
         self.logger = logging.getLogger(__name__)
