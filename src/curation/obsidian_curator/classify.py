@@ -124,6 +124,6 @@ Return strict JSON only."""
     tags = data.get('tags',[])
     ents = data.get('entities',{})
     # Use publication_readiness as the relevance score for downstream processing
-    relevance = data.get('publication_readiness', 0.5)
+    pub_readiness = data.get('publication_readiness', 0.5)
     
-    return cats, tags, ents
+    return cats, tags, ents, pub_readiness

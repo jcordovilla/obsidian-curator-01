@@ -1,6 +1,6 @@
 import re
 
-WIKILINK = r'!\[\[(attachments/[^\]]+?\.(?:pdf|png|jpe?g|webp|tif|tiff))\]\]'
+WIKILINK = r'!\[\[(attachments/[^\]]+?\.(?:pdf|png|jpe?g|webp|tif|tiff|mp3|wav|m4a|ogg|flac))\]\]'
 MDIMG    = r'!\[[^\]]*\]\((attachments/[^)]+)\)'
 
 def detect_assets(body:str, attachments_root:str):
@@ -11,7 +11,12 @@ def detect_assets(body:str, attachments_root:str):
     assets = []
     for p in sorted(paths):
         ext = p.split('.')[-1].lower()
-        kind = 'pdf' if ext=='pdf' else 'image'
+        if ext == 'pdf':
+            kind = 'pdf'
+        elif ext in ('mp3', 'wav', 'm4a', 'ogg', 'flac'):
+            kind = 'audio'
+        else:
+            kind = 'image'
         assets.append({'path': p, 'kind': kind})
     return assets
 

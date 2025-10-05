@@ -75,7 +75,18 @@ def calculate_content_richness(text, title, meta):
     professional_indicators_en = [
         'analysis', 'report', 'study', 'research', 'project', 'investment',
         'infrastructure', 'finance', 'governance', 'risk', 'management',
-        'technology', 'development', 'strategy', 'policy', 'regulation'
+        'technology', 'development', 'strategy', 'policy', 'regulation',
+        # Energy sector
+        'energy', 'power', 'renewable', 'wind', 'solar', 'nuclear', 'tidal', 'grid',
+        'turbine', 'offshore', 'onshore', 'generation', 'capacity', 'electricity',
+        # Infrastructure sectors
+        'transport', 'water', 'wastewater', 'highway', 'railway', 'port', 'airport',
+        'hospital', 'school', 'telecommunications', 'broadband', 'digital',
+        # Policy & legal
+        'legislation', 'law', 'legal', 'regulatory', 'policy', 'government', 'budget',
+        'concession', 'ppp', 'contract', 'procurement', 'tender', 'bid',
+        # Economic & market
+        'market', 'sector', 'industry', 'economic', 'fiscal', 'funding', 'financing'
     ]
     
     professional_indicators_es = [
@@ -83,12 +94,24 @@ def calculate_content_richness(text, title, meta):
         'infraestructura', 'infraestructuras', 'financiación', 'concesión', 'concesiones',
         'licitación', 'millones', 'contrato', 'contratos', 'obra', 'obras',
         'ministerio', 'presupuesto', 'presupuestos', 'tarifa', 'tarifas', 'gestión',
-        'política', 'regulación', 'desarrollo', 'estrategia', 'riesgo'
+        'política', 'regulación', 'desarrollo', 'estrategia', 'riesgo',
+        # Energy sector (Spanish)
+        'energía', 'eléctrica', 'renovable', 'eólica', 'solar', 'nuclear', 'mareomotriz',
+        'turbina', 'aerogenerador', 'generación', 'capacidad', 'electricidad',
+        # Infrastructure sectors (Spanish)
+        'transporte', 'agua', 'carretera', 'autopista', 'ferrocarril', 'puerto', 'aeropuerto',
+        'hospital', 'escuela', 'telecomunicaciones', 'digital',
+        # Policy & legal (Spanish)
+        'legislación', 'ley', 'legal', 'regulatorio', 'gobierno', 'público',
+        'contratación', 'adjudicación', 'licitación',
+        # Economic & market (Spanish)
+        'mercado', 'sector', 'industria', 'económico', 'fiscal', 'financiero'
     ]
     
     # Combine based on language
     language = meta.get('language', 'en')
-    if language == 'es':
+    # Support Spanish locale variants (es, es-ES, es-MX, etc.)
+    if language.lower().startswith('es'):
         indicators = professional_indicators_es
         # Boost Spanish structured content recognition
         structure_multiplier = 1.3
@@ -103,151 +126,126 @@ def calculate_content_richness(text, title, meta):
     final_richness = min(1.0, length_richness + structure_score)
     return final_richness
 
-def get_llm_relevance_score(text, title, meta, cfg):
-    """Use LLM to assess professional relevance for publication-ready content."""
+def get_llm_usefulness_score(text, title, meta, cfg):
+    """Single-pass LLM assessment of content usefulness for knowledge base."""
     
     # Truncate text for LLM processing
-    text_sample = text[:3000] if len(text) > 3000 else text
+    text_sample = text[:3500] if len(text) > 3500 else text
     
-    # Extract metadata for better credibility assessment
+    # Extract metadata
     source = meta.get('source', 'Not specified')
     language = meta.get('language', 'Unknown')
     date_created = meta.get('date created', 'Unknown')
-    date_modified = meta.get('date modified', 'Unknown')
     
-    prompt = f"""{PROFESSIONAL_CONTEXT}
+    prompt = f"""You are evaluating content for an infrastructure investment consultant's knowledge base.
 
-RELEVANCE ANALYSIS ROLE: Evaluate content for inclusion in a specialized knowledge database supporting infrastructure investment research, analysis, and professional writing.
-
-CRITICAL ANTI-FABRICATION RULES:
-- NEVER invent, assume, or infer content not explicitly present in the provided text
-- NEVER add professional context, background, or interpretation beyond what is stated
-- NEVER reference external sources, studies, or organizations not mentioned in the text
-- Base ALL assessments strictly on the provided document metadata and content
-- If content is insufficient for proper evaluation, state this honestly
-- Every assessment must be directly traceable to the source material
+INPUT TYPES YOU'LL RECEIVE:
+- Personal work logs, timesheets, meeting notes, administrative tasks
+- Web-clipped industry articles, news, and reports (may have residual boilerplate)
+- Conference/event promotional emails and announcements
+- Technical guides, research papers, and methodologies
+- User's own professional notes, analysis, and reflections
+- PDFs, images with OCR text, and transcribed audio
 
 DOCUMENT METADATA:
 Title: {title}
 Source: {source}
 Language: {language}
-Created: {date_created}
-Modified: {date_modified}
+Date: {date_created}
 
-CONTENT: {text_sample}
+CONTENT SAMPLE:
+{text_sample}
 
-EVALUATION DIMENSIONS:
-Rate each dimension (0-1) based on knowledge value for infrastructure investment professionals:
+EVALUATION PURPOSE:
+Score this content based on its REUSABILITY as knowledge material for a professional who:
+- Writes articles and reports on infrastructure investment, PPPs, and sector developments
+- Conducts due diligence and market analysis
+- Needs broad knowledge across energy, transport, water, legal, policy, and economic domains
+- Works internationally (any geography is relevant for benchmarking)
 
-1. PROFESSIONAL RELEVANCE: How valuable is this knowledge for infrastructure investment professionals?
-   - HIGHLY VALUABLE (0.7-1.0): Industry news, expert opinions, policy developments, case studies, technical analysis, market intelligence, regulatory updates, strategic frameworks, sector trends
-   - USEFUL KNOWLEDGE (0.5-0.69): General sector information, background context, conceptual frameworks, educational content, methodological insights
-   - MARGINAL VALUE (0.3-0.49): Tangential content with some connection to infrastructure, basic definitions only, outdated news
-   - NO VALUE (0.0-0.29): Personal content (to-do lists, travel diaries, personal reflections), software tutorials (unless infrastructure-specific), corrupted/placeholder content
+SCORING RUBRIC (0-1):
 
-2. SOURCE CREDIBILITY: How trustworthy and authoritative is the source?
-   - AUTHORITATIVE (0.8-1.0): Government agencies, established research institutions, peer-reviewed sources
-   - CREDIBLE (0.6-0.79): Industry publications, professional organizations, expert practitioners
-   - MODERATE (0.4-0.59): Trade publications, company reports, conference presentations
-   - QUESTIONABLE (0.2-0.39): Blogs, social media, unverified sources
-   - UNRELIABLE (0.0-0.19): Anonymous sources, clearly biased material, broken links
+🟢 HIGH VALUE (0.70-1.00) - Reusable knowledge about infrastructure sectors/markets/policy:
+• Industry news, sector analysis, market trends, company strategies
+• Policy documents, regulatory changes, legal cases, economic data
+• Technical guides, methodologies, engineering developments
+• Project announcements, case studies, expert commentary
+• Energy developments (ANY energy source), infrastructure projects
+• Government budgets, fiscal policy, public investment programs
+Examples: "Spain toll revenue impact", "Indonesia credit rating upgrade", "Energy access strategies", "Water tariff regulations"
 
-3. CONTENT DEPTH: How substantial and detailed is the technical content?
-   - COMPREHENSIVE (0.8-1.0): Detailed methodology, extensive data, thorough analysis
-   - SUBSTANTIAL (0.6-0.79): Good technical detail, some data/evidence, clear frameworks
-   - ADEQUATE (0.4-0.59): Basic technical content, limited data, general frameworks
-   - SUPERFICIAL (0.2-0.39): High-level overview, minimal detail, mostly descriptive
-   - INSUFFICIENT (0.0-0.19): No technical substance, only headlines/summaries
+🟡 MEDIUM VALUE (0.45-0.69) - Background knowledge, context, frameworks:
+• General sector overviews, educational content, conceptual frameworks
+• Conference announcements with relevant topics
+• Comparative examples, basic policy information
+• Industry news with limited analysis
+Examples: "Overview of PPP models", "Introduction to infrastructure finance", "Wind turbine market news"
 
-CRITICAL EXCLUSIONS (automatic 0.0-0.3 scores):
-- Personal documents: to-do lists, reminders, travel diaries, personal reflections unrelated to infrastructure
-- Software tutorials: installation guides, technical how-tos (unless infrastructure-specific tools)
-- Corrupted/placeholder content: navigation elements, empty content, ad clutter
+🟠 LOW VALUE (0.25-0.44) - Minimal reusable knowledge:
+• Very general content weakly connected to infrastructure
+• Promotional material with little substance
+• Incomplete information, mostly navigation/boilerplate
+Examples: "Generic project management tips", "Software vendor marketing"
 
-VALUE FOR KNOWLEDGE DISTILLATION:
-Content is valuable if it helps professionals:
-- Understand industry trends and developments
-- Learn about specific projects, policies, or regulatory changes
-- Gain insights from experts or practitioners
-- Access case studies, frameworks, or methodologies
-- Track market intelligence and competitive landscape
+🔴 NO VALUE (0.00-0.24) - Discard, not reusable knowledge:
+• Personal timesheets: "Met with X", "Reviewed Y document", "Sent email to Z"
+• Administrative logs: daily activity lists, task tracking, meeting schedules WITHOUT insights
+• Personal receipts, invoices, bills, travel bookings
+• Software installation guides (unless infrastructure-specific tools)
+• Corrupted content, empty files, pure navigation elements
+• Unclear OCR text with garbled characters, random symbols, or nonsensical content
+Examples: "April 3rd - Finished PASTAS letter, emailed Brett, reviewed memo", "ai ail aD 4 ap ay i 12SDP KICK -oEE Me ERTNG"
 
-CONTEXT: Content will be used to support research, analysis, writing, and decision-making in infrastructure investment. Value knowledge that informs understanding, even if not immediately publication-ready.
+IMPORTANT: Industry news about energy, transport, water, policy, etc. should score AT LEAST 0.45 (medium value). Only administrative/personal content should score below 0.25.
 
-Return JSON: {{"relevance": 0.xx, "credibility": 0.xx, "depth": 0.xx, "reasoning": "concise explanation focusing on publication utility"}}"""
+CRITICAL: Personal notes WITH professional analysis/insights ARE valuable. Only discard administrative/logistical tracking.
+
+ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value from title alone.
+
+Return JSON: {{"usefulness": 0.xx, "reasoning": "2-3 sentences explaining score based on knowledge reusability"}}"""
 
     try:
-        result = chat_json(cfg['models']['fast'], 
-                          system=f"""{PROFESSIONAL_CONTEXT}
-                          
-EXPERT EVALUATOR ROLE: You are an expert evaluator for professional knowledge curation.
-
-CRITICAL ANTI-FABRICATION RULES:
-- NEVER invent, assume, or infer content not explicitly present in the provided text
-- NEVER add professional context, background, or interpretation beyond what is stated
-- NEVER reference external sources, studies, or organizations not mentioned in the text
-- Base ALL assessments strictly on the provided document metadata and content
-- If content is insufficient for proper evaluation, state this honestly
-- Every assessment must be directly traceable to the source material
-
-Return strict JSON only.""",
+        result = chat_json(cfg['models']['main'], 
+                          system="You evaluate infrastructure consultant's content. Return strict JSON only.",
                           user=prompt, 
-                          tokens=400, 
-                          temp=0.3)  # Higher temperature for more creative relevance reasoning
+                          tokens=300, 
+                          temp=0.15)
         
         return {
-            'relevance': min(1.0, max(0.0, result.get('relevance', 0.5))),
-            'credibility': min(1.0, max(0.0, result.get('credibility', 0.5))),
-            'depth': min(1.0, max(0.0, result.get('depth', 0.5))),  # Changed from novelty to depth
-            'llm_reasoning': result.get('reasoning', 'No reasoning provided')
+            'usefulness': min(1.0, max(0.0, result.get('usefulness', 0.4))),
+            'reasoning': result.get('reasoning', 'No reasoning provided')
         }
     except Exception as e:
-        print(f"Warning: LLM relevance scoring failed: {e}")
-        # Fallback to basic heuristics
+        print(f"Warning: LLM scoring failed: {e}")
         return {
-            'relevance': 0.3,
-            'credibility': 0.4,
-            'depth': 0.3,
-            'llm_reasoning': 'LLM scoring failed, using fallback'
+            'usefulness': 0.3,
+            'reasoning': 'LLM scoring failed, using conservative fallback'
         }
 
-def analyze_features(content, meta, cfg, relevance_score=None):
-    """Analyze content features with LLM-powered professional relevance assessment."""
+def analyze_features(content, meta, cfg):
+    """Simplified single-pass content analysis."""
     text = content.get('text','')
     title = meta.get('title', '')
     
     embedding = embed_text(text, cfg['models']['embed']) if text else None
     
-    # Get LLM-based professional relevance assessment
-    llm_scores = get_llm_relevance_score(text, title, meta, cfg)
+    # Single LLM call for usefulness assessment - trust the LLM
+    llm_result = get_llm_usefulness_score(text, title, meta, cfg)
     
     features = {
         'length_chars': len(text),
         'has_numbers': any(ch.isdigit() for ch in text),
         'sections': text.count('\n## '),
         'embedding': embedding,
-        'relevance': llm_scores['relevance'],
-        'credibility': llm_scores['credibility'],
-        'depth': llm_scores['depth'],  # Changed from novelty to depth
-        'richness': calculate_content_richness(text, title, meta),  # More sophisticated richness calculation
-        'llm_reasoning': llm_scores['llm_reasoning']
+        'usefulness': llm_result['usefulness'],  # Pure LLM score
+        'reasoning': llm_result['reasoning']
     }
     return features
 
 def score_usefulness(feats, cfg):
-    """Score usefulness using LLM-assessed professional relevance for publications."""
-    # Publication-focused weights - emphasize relevance and depth for citation quality
-    # NOTE: Credibility disabled due to systematic failures with non-English sources
-    # Redistributed weight to relevance (0.50), depth (0.30), richness (0.20)
-    w = dict(relevance=0.50, credibility=0.00, depth=0.30, richness=0.20)
-    
-    # Weighted combination optimized for publication utility
-    score = (w['relevance'] * feats['relevance'] +
-             # w['credibility'] * feats['credibility'] +  # DISABLED
-             w['depth'] * feats['depth'] +
-             w['richness'] * feats['richness'])
-    
-    return max(0.0, min(1.0, score))
+    """Return the LLM-assessed usefulness score."""
+    # Simplified: LLM score is the final score (already capped by richness in analyze_features)
+    return feats['usefulness']
 
 def decide(score, decision_cfg):
     th = decision_cfg['keep_threshold']

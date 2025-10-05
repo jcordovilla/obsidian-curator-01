@@ -1,6 +1,6 @@
 decision:
-  gray_margin: 0.10
-  keep_threshold: 0.55
+  gray_margin: 0.2
+  keep_threshold: 0.45
 language:
   default: auto
 models:
@@ -32,8 +32,8 @@ paths:
   vault: /Users/jose/Documents/Obsidian/Evermd
 priorities:
 - pdf
-- image
 - text
+- image
 summaries:
   image:
     bullets: 6

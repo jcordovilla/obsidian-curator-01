@@ -14,6 +14,17 @@ def write_curated_note(note_path, meta, cats, tags, ents, summary, content, scor
     fm.append(f'tags: {tags}')
     fm.append(f'usefulness: {score:.3f}')
     
+    # Add extracted entities
+    if ents:
+        if ents.get('organizations'):
+            fm.append(f'organizations: {ents["organizations"]}')
+        if ents.get('projects'):
+            fm.append(f'projects: {ents["projects"]}')
+        if ents.get('technologies'):
+            fm.append(f'technologies: {ents["technologies"]}')
+        if ents.get('locations'):
+            fm.append(f'locations: {ents["locations"]}')
+    
     # Preserve important source metadata
     if meta.get('source'):
         fm.append(f'source: {meta.get("source")}')

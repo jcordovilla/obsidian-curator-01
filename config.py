@@ -217,11 +217,11 @@ def get_curation_config():
                 "ESG & Sustainability", "Climate Resilience", "Innovation & R&D", "Capacity Building"
             ]
         },
-        'decision': {
-            'keep_threshold': 0.55,  # Threshold to keep high-value content
-            'gray_margin': 0.10      # Narrowed gray zone for manual review (0.45-0.55 = triage)
-        },
-        'priorities': ["pdf","image","text"],
+    'decision': {
+        'keep_threshold': 0.45,  # Keep medium+ value content (0.45-1.0)
+        'gray_margin': 0.20      # Triage zone (0.25-0.45), discard <0.25
+    },
+        'priorities': ["pdf","text","image"],
         'summaries': {
             'pdf': {'bullets': 8, 'max_tokens': 900},
             'image': {'bullets': 6, 'max_tokens': 500}

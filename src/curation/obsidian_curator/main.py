@@ -59,17 +59,17 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
                 logger.info(f'DISCARD: {note_path} (insufficient content: {len(text)} chars)')
                 continue
             
-            # Early classification to get relevance score for better filtering
-            cats, tags, ents = classify_json(content, meta, cfg)
+            # Early classification for categories/tags/entities
+            cats, tags, ents, pub_readiness = classify_json(content, meta, cfg)
             
-            # Use LLM-powered analysis for professional relevance
+            # Single-pass LLM usefulness assessment
             feats = analyze_features(content, meta, cfg)
             score = score_usefulness(feats, cfg)
             decision = decide(score, cfg['decision'])
             
             # Log LLM reasoning for transparency
-            llm_reasoning = feats.get('llm_reasoning', 'No reasoning available')
-            logger.debug(f'LLM Assessment for {note_path}: {llm_reasoning}')
+            reasoning = feats.get('reasoning', 'No reasoning available')
+            logger.debug(f'Usefulness Assessment for {note_path}: {reasoning}')
             
             if decision == 'triage':
                 if not dry_run:
@@ -89,7 +89,8 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             
             if not dry_run:
                 write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg)
-                EmbeddingIndex.add(note_path, content.get('embedding'))
+                # Use the embedding from features analysis (not content dict)
+                EmbeddingIndex.add(note_path, feats.get('embedding'))
                 Manifest.update(note_path, score, decision, primary)
             logger.success(f'KEPT{ " (dry-run)" if dry_run else "" }: {note_path} (score={score:.3f})')
         except Exception as e:
