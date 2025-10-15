@@ -53,11 +53,8 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             primary = choose_primary(assets, body, cfg['priorities'])
             content = extract_content(primary, assets, body, meta.get('language'), attachments, note_path)
             
-            # CRITICAL: Validate content before any scoring
+            # Let the LLM decide on content quality - no early filtering
             text = content.get('text', '').strip()
-            if not text or len(text) < 50:
-                logger.info(f'DISCARD: {note_path} (insufficient content: {len(text)} chars)')
-                continue
             
             # Early classification for categories/tags/entities
             cats, tags, ents, pub_readiness = classify_json(content, meta, cfg)
@@ -88,7 +85,7 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             summary = summarize_content(content, meta, cats, cfg)
             
             if not dry_run:
-                write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg)
+                write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg, attachments)
                 # Use the embedding from features analysis (not content dict)
                 EmbeddingIndex.add(note_path, feats.get('embedding'))
                 Manifest.update(note_path, score, decision, primary)

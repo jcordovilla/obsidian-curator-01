@@ -219,7 +219,7 @@ class NoteTypeTester:
                 'note_type': self.classify_note_type(note_path)
             }
     
-    def test_full_pipeline(self, note_path: Path, test_raw_dir: Path, test_preprocessed_dir: Path, test_curated_dir: Path) -> Dict:
+    def test_full_pipeline(self, note_path: Path, test_raw_dir: Path, test_preprocessed_dir: Path, test_curated_dir: Path, note_index: int) -> Dict:
         """Test the complete pipeline (preprocessing + curation) on a single note."""
         note_type = self.classify_note_type(note_path)
         note_name = note_path.name
@@ -233,53 +233,146 @@ class NoteTypeTester:
         }
         
         try:
-            # Step 1: Copy note to test directory
-            test_raw_path = test_raw_dir / note_name
+            # Step 1: Copy note to test directory (EXACT same structure as test_complete_pipeline.py)
+            new_note_name = f"test_note_{note_index:02d}_{note_name}"
+            test_raw_path = test_raw_dir / "notes" / new_note_name
             import shutil
             shutil.copy2(note_path, test_raw_path)
             
-            # Step 2: Test preprocessing
+            # Copy associated attachments (EXACT same logic as test_complete_pipeline.py)
+            note_stem = note_path.stem
+            source_vault = note_path.parent.parent  # Go up to vault root
+            
+            # Build attachment mapping (same as test_complete_pipeline.py)
+            attachments_dir = source_vault / "attachments"
+            attachment_mapping = {}
+            if attachments_dir.exists():
+                for att_dir in attachments_dir.iterdir():
+                    if att_dir.is_dir() and att_dir.name.endswith('.resources'):
+                        # Remove .resources extension to get the base name
+                        base_name = att_dir.name[:-10]
+                        attachment_mapping[base_name] = att_dir
+            
+            def sanitize_filename(filename):
+                """Sanitize filename the same way Obsidian/Evernote does for attachment directories."""
+                # Convert multiple spaces to double underscores, single spaces to single underscores
+                import re
+                sanitized = re.sub(r'\s{2,}', '__', filename)  # Multiple spaces -> __
+                sanitized = re.sub(r'\s', '_', sanitized)      # Single spaces -> _
+                return sanitized
+            
+            real_attachments_dir = None
+            
+            # Try exact match first
+            exact_att_dir = source_vault / "attachments" / f"{note_stem}.resources"
+            if exact_att_dir.exists():
+                real_attachments_dir = exact_att_dir
+            else:
+                # Try sanitized match
+                sanitized_stem = sanitize_filename(note_stem)
+                if sanitized_stem in attachment_mapping:
+                    real_attachments_dir = attachment_mapping[sanitized_stem]
+            
+            if real_attachments_dir and real_attachments_dir.exists():
+                try:
+                    new_attachments_dir = test_raw_dir / "attachments" / f"{new_note_name}.resources"
+                    shutil.copytree(real_attachments_dir, new_attachments_dir)
+                    attachment_count = len(list(real_attachments_dir.iterdir()))
+                    self.logger.info(f"    + attachments: {attachment_count} files")
+                except Exception as e:
+                    self.logger.warning(f"    + attachments: ERROR copying - {e}")
+            else:
+                # Try alternative attachment locations
+                alt_locations = [
+                    source_vault / "attachments" / note_stem,
+                    source_vault / "attachments" / f"{note_stem}_files",
+                    source_vault / "attachments" / f"{note_stem}_attachments"
+                ]
+                
+                found_attachments = False
+                for alt_dir in alt_locations:
+                    if alt_dir.exists():
+                        try:
+                            new_attachments_dir = test_raw_dir / "attachments" / f"{new_note_name}.resources"
+                            shutil.copytree(alt_dir, new_attachments_dir)
+                            attachment_count = len(list(alt_dir.iterdir()))
+                            self.logger.info(f"    + attachments: {attachment_count} files (from {alt_dir.name})")
+                            found_attachments = True
+                            break
+                        except Exception as e:
+                            self.logger.warning(f"    + attachments: ERROR copying from {alt_dir.name} - {e}")
+                            continue
+                
+                # If still not found, try to find attachments by reading the note content
+                if not found_attachments:
+                    try:
+                        with open(note_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        # Look for attachment references in the content
+                        import re
+                        attachment_refs = re.findall(r'!\[\[attachments/([^\]]+)\]\]', content)
+                        if attachment_refs:
+                            # Try to find the attachment folder by the referenced file
+                            for ref in attachment_refs:
+                                ref_stem = ref.split('/')[0]  # Get the folder name
+                                potential_attachments_dir = source_vault / "attachments" / ref_stem
+                                if potential_attachments_dir.exists():
+                                    try:
+                                        new_attachments_dir = test_raw_dir / "attachments" / f"{new_note_name}.resources"
+                                        shutil.copytree(potential_attachments_dir, new_attachments_dir)
+                                        attachment_count = len(list(potential_attachments_dir.iterdir()))
+                                        self.logger.info(f"    + attachments: {attachment_count} files (found by content reference: {ref_stem})")
+                                        found_attachments = True
+                                        break
+                                    except Exception as e:
+                                        self.logger.warning(f"    + attachments: ERROR copying from {ref_stem} - {e}")
+                                        continue
+                    except Exception as e:
+                        self.logger.warning(f"    + attachments: ERROR reading note content - {e}")
+                
+                if not found_attachments:
+                    self.logger.info(f"    + attachments: none found")
+            
+            # Step 2: Test preprocessing (use the SAME pipeline as test_complete_pipeline.py)
             self.logger.info(f"    🧹 Preprocessing {note_type}: {note_name}")
             
-            # Read original content
-            with open(test_raw_path, 'r', encoding='utf-8') as f:
-                original_content = f.read()
+            # Use the same preprocessing pipeline as test_complete_pipeline.py
+            from src.preprocessing import BatchProcessor
             
-            # Test preprocessing function
-            frontmatter = None
-            if original_content.startswith('---'):
-                try:
-                    import yaml
-                    parts = original_content.split('---', 2)
-                    if len(parts) >= 3:
-                        frontmatter = yaml.safe_load(parts[1])
-                        content_body = parts[2]
-                    else:
-                        content_body = original_content
-                except:
-                    content_body = original_content
+            # Initialize batch processor with the same settings as test_complete_pipeline.py
+            processor = BatchProcessor(
+                vault_path=str(test_raw_dir),
+                output_path=str(test_preprocessed_dir),
+                backup=False,
+                batch_size=10,
+                max_workers=2
+            )
+            
+            # Process the single note
+            results = processor.process_vault()
+            
+            # Check if preprocessing was successful
+            if results['summary']['processed_files'] > 0:
+                # Find the preprocessed file
+                test_preprocessed_path = test_preprocessed_dir / "notes" / new_note_name
+                
+                if test_preprocessed_path.exists():
+                    # Read the preprocessed content to calculate metrics
+                    with open(test_raw_path, 'r', encoding='utf-8') as f:
+                        original_content = f.read()
+                    
+                    with open(test_preprocessed_path, 'r', encoding='utf-8') as f:
+                        preprocessed_content = f.read()
+                    
+                    # Calculate metrics
+                    original_length = len(original_content)
+                    cleaned_length = len(preprocessed_content)
+                    reduction_percentage = ((original_length - cleaned_length) / original_length * 100) if original_length > 0 else 0
+                else:
+                    raise Exception("Preprocessed file not found")
             else:
-                content_body = original_content
-            
-            cleaned_content = clean_html_like_clipping(content_body, frontmatter)
-            
-            # Calculate preprocessing metrics
-            if frontmatter is not None:
-                original_body_length = len(content_body)
-                cleaned_length = len(cleaned_content)
-                reduction_percentage = ((original_body_length - cleaned_length) / original_body_length * 100) if original_body_length > 0 else 0
-                original_length = len(original_content)
-            else:
-                original_length = len(original_content)
-                cleaned_length = len(cleaned_content)
-                reduction_percentage = ((original_length - cleaned_length) / original_length * 100) if original_length > 0 else 0
-            
-            # Create preprocessed file
-            test_preprocessed_path = test_preprocessed_dir / note_name
-            preprocessed_content = original_content.replace(content_body, cleaned_content) if frontmatter else cleaned_content
-            
-            with open(test_preprocessed_path, 'w', encoding='utf-8') as f:
-                f.write(preprocessed_content)
+                raise Exception("Preprocessing failed")
             
             result['preprocessing'] = {
                 'success': True,
@@ -292,7 +385,7 @@ class NoteTypeTester:
             self.logger.info(f"    🎯 Curation {note_type}: {note_name}")
             
             try:
-                # Set up curation paths
+                # Set up curation paths (same structure as test_complete_pipeline.py)
                 curation_output_dir = test_curated_dir / "notes"
                 curation_output_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -300,22 +393,17 @@ class NoteTypeTester:
                 from src.curation.obsidian_curator.main import load_cfg
                 cfg = load_cfg("config.yaml")
                 
-                # Override output paths for testing
+                # Override output paths for testing (same as test_complete_pipeline.py)
                 cfg['paths']['out_notes'] = str(curation_output_dir)
                 cfg['paths']['out_assets'] = str(curation_output_dir.parent / "attachments")
+                cfg['paths']['vault'] = str(test_preprocessed_dir)
+                cfg['paths']['attachments'] = str(test_preprocessed_dir / "attachments")
                 
-                # Create a temporary vault with just this note for curation
-                temp_vault_dir = test_curated_dir / "temp_vault"
-                temp_vault_dir.mkdir(parents=True, exist_ok=True)
-                temp_note_path = temp_vault_dir / test_preprocessed_path.name
-                
-                import shutil
-                shutil.copy2(test_preprocessed_path, temp_note_path)
-                
-                # Run curation on the single note
+                # Run curation on the preprocessed notes (same as test_complete_pipeline.py)
                 curation_results = curation_run(
                     cfg=cfg,
-                    vault=str(temp_vault_dir),
+                    vault=str(test_preprocessed_dir),
+                    attachments=str(test_preprocessed_dir / "attachments"),
                     out_notes=str(curation_output_dir),
                     dry_run=False
                 )
@@ -395,9 +483,6 @@ class NoteTypeTester:
                 }
                 
                 result['pipeline_success'] = True
-                
-                # Cleanup temp vault
-                shutil.rmtree(temp_vault_dir)
                 
             except Exception as e:
                 result['curation'] = {
@@ -482,19 +567,33 @@ class NoteTypeTester:
         """Run the complete pipeline test (preprocessing + curation) on the diverse sample."""
         self.logger.info(f"\n🚀 Running COMPLETE pipeline test on {len(note_types)} diverse notes...")
         
-        # Create temporary test directories
-        test_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        test_raw_dir = Path(f"tests/test_data/raw_{test_timestamp}")
-        test_preprocessed_dir = Path(f"tests/test_data/preprocessed_{test_timestamp}")
-        test_curated_dir = Path(f"tests/test_data/curated_{test_timestamp}")
+        # Use the same test directory structure as test_complete_pipeline.py
+        test_cfg = config.get_test_config()
+        test_raw_dir = Path(test_cfg['paths']['test_raw_vault'])
+        test_preprocessed_dir = Path(test_cfg['paths']['test_preprocessed_vault'])
+        test_curated_dir = Path(test_cfg['paths']['test_curated_vault'])
         
-        # Create directories
+        # Clean and recreate directories (same as test_complete_pipeline.py)
+        import shutil
+        import os
+        
+        # Clean existing test folders
+        if test_raw_dir.exists():
+            shutil.rmtree(test_raw_dir)
+        if test_preprocessed_dir.exists():
+            shutil.rmtree(test_preprocessed_dir)
+        if test_curated_dir.exists():
+            shutil.rmtree(test_curated_dir)
+        
+        # Create directories with proper structure
         test_raw_dir.mkdir(parents=True, exist_ok=True)
+        (test_raw_dir / "notes").mkdir(exist_ok=True)
+        (test_raw_dir / "attachments").mkdir(exist_ok=True)
         test_preprocessed_dir.mkdir(parents=True, exist_ok=True)
         test_curated_dir.mkdir(parents=True, exist_ok=True)
         
         results = {
-            'timestamp': test_timestamp,
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S"),
             'note_types_tested': {},
             'pipeline_results': {},
             'summary': {},
@@ -508,10 +607,10 @@ class NoteTypeTester:
         pipeline_success = 0
         total_notes = len(note_types)
         
-        for note_type, note_path in note_types.items():
+        for i, (note_type, note_path) in enumerate(note_types.items(), 1):
             self.logger.info(f"  Processing {note_type}: {note_path.name}")
             
-            result = self.test_full_pipeline(note_path, test_raw_dir, test_preprocessed_dir, test_curated_dir)
+            result = self.test_full_pipeline(note_path, test_raw_dir, test_preprocessed_dir, test_curated_dir, i)
             results['pipeline_results'][note_type] = result
             
             if result['preprocessing']['success']:
@@ -558,20 +657,11 @@ class NoteTypeTester:
             ) / max(1, curation_success)
         }
         
-        # Preserve test directories for inspection (don't cleanup automatically)
+        # Preserve test directories for inspection (same as test_complete_pipeline.py)
         self.logger.info(f"📁 Test directories preserved for inspection:")
         self.logger.info(f"  Raw: {test_raw_dir}")
         self.logger.info(f"  Preprocessed: {test_preprocessed_dir}")
         self.logger.info(f"  Curated: {test_curated_dir}")
-        
-        # Optional cleanup (uncomment if you want to clean up)
-        # import shutil
-        # if test_raw_dir.exists():
-        #     shutil.rmtree(test_raw_dir)
-        # if test_preprocessed_dir.exists():
-        #     shutil.rmtree(test_preprocessed_dir)
-        # if test_curated_dir.exists():
-        #     shutil.rmtree(test_curated_dir)
         
         return results
     

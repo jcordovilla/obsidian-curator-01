@@ -143,7 +143,16 @@ class ContentClassifier:
         indicators['has_attachment_reference'] = '![[attachments/' in content
         indicators['has_pdf_attachment'] = '.pdf' in content.lower()
         indicators['has_audio_attachment'] = any(ext in content.lower() for ext in ['.wav', '.mp3', '.m4a', '.aac', '.flac', '.ogg', '.wma'])
+        indicators['has_image_attachment'] = any(ext in content.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'])
         indicators['no_attachments'] = not indicators['has_attachment_reference']
+        
+        # Audio-specific indicators
+        indicators['audio_only_content'] = (
+            indicators['has_audio_attachment'] and 
+            word_count < 100 and 
+            not indicators['has_headers'] and
+            not indicators['structured_content']
+        )
         
         # Structure analysis
         indicators['has_headers'] = bool(re.search(r'^#+\s', content, re.MULTILINE))
@@ -271,6 +280,19 @@ class ContentClassifier:
                 'preserve_elements': ['main_content', 'headers', 'images', 'source_url'],
                 'remove_elements': ['navigation', 'social_sharing', 'comments', 'ads'],
                 'special_handling': ['validate_source_url', 'extract_article_metadata']
+            })
+        
+        elif category == 'audio_note':
+            recommendations.update({
+                'priority': 'high',
+                'actions': [
+                    'transcribe_audio',
+                    'analyze_transcription',
+                    'extract_key_points'
+                ],
+                'preserve_elements': ['audio_file', 'transcription', 'metadata'],
+                'remove_elements': [],
+                'special_handling': ['whisper_transcription', 'llm_analysis']
             })
         
         elif category == 'pdf_annotation':

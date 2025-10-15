@@ -1358,39 +1358,338 @@ def remove_web_clipping_sections(content: str) -> str:
         cleaned_lines.append(line)
         i += 1
     
+    # Remove duplicate content blocks
+    cleaned_lines = remove_duplicate_blocks(cleaned_lines)
+    
     return '\n'.join(cleaned_lines)
 
 
-def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
-    """Enhanced web clipping cleaner using proper Trafilatura integration."""
+def remove_duplicate_blocks(lines):
+    """Remove duplicate content blocks that often appear in web clippings."""
+    if not lines:
+        return lines
+    
+    # Look for repeated patterns of 3+ consecutive lines
+    result = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        result.append(line)
+        
+        # Check if this line starts a repeated block
+        if i + 6 < len(lines):  # Need at least 3 lines to form a block
+            # Look for the same 3-line pattern starting at different positions
+            block1 = lines[i:i+3]
+            block1_text = ' '.join(block1).strip().lower()
+            
+            # Skip if block is too short or contains mostly whitespace
+            if len(block1_text) < 20:
+                i += 1
+                continue
+            
+            # Look for duplicates
+            j = i + 3
+            while j + 3 <= len(lines):
+                block2 = lines[j:j+3]
+                block2_text = ' '.join(block2).strip().lower()
+                
+                # If blocks are similar (80% similarity), skip the duplicate
+                if block2_text and len(block2_text) > 20:
+                    similarity = calculate_text_similarity(block1_text, block2_text)
+                    if similarity > 0.8:
+                        # Skip the duplicate block
+                        j += 3
+                        continue
+                
+                j += 1
+            
+            # If we found duplicates, skip to after the first block
+            if j > i + 3:
+                i += 3
+            else:
+                i += 1
+        else:
+            i += 1
+    
+    return result
+
+
+def calculate_text_similarity(text1, text2):
+    """Calculate similarity between two text strings."""
+    if not text1 or not text2:
+        return 0.0
+    
+    # Simple word-based similarity
+    words1 = set(text1.split())
+    words2 = set(text2.split())
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    return len(intersection) / len(union) if union else 0.0
+
+
+def apply_aggressive_cleaning(content: str) -> str:
+    """Apply aggressive cleaning patterns to remove remaining boilerplate."""
     import re
     
-    # Simple general check: if it has a URL source or HTML tags, clean it
+    lines = content.split('\n')
+    cleaned_lines = []
+    
+    # Track consecutive lines with only URLs to detect navigation blocks
+    consecutive_url_lines = 0
+    url_block_threshold = 3  # Remove blocks with 3+ consecutive URL-only lines
+    
+    for line in lines:
+        line_stripped = line.strip()
+        
+        # Skip empty lines
+        if not line_stripped:
+            cleaned_lines.append(line)
+            consecutive_url_lines = 0  # Reset counter
+            continue
+        
+        # Check if line is primarily a URL or link
+        is_url_line = (
+            line_stripped.startswith('http://') or 
+            line_stripped.startswith('https://') or
+            line_stripped.startswith('<http') or
+            (line_stripped.startswith('*') and ('http://' in line_stripped or 'https://' in line_stripped)) or
+            (line_stripped.startswith('-') and ('http://' in line_stripped or 'https://' in line_stripped))
+        )
+        
+        # Track consecutive URL lines
+        if is_url_line:
+            consecutive_url_lines += 1
+            # Skip this line if part of a navigation block
+            if consecutive_url_lines >= url_block_threshold:
+                continue
+        else:
+            # If we were in a URL block, remove those lines
+            if consecutive_url_lines >= url_block_threshold:
+                # Remove the last few URL lines we added
+                cleaned_lines = cleaned_lines[:-consecutive_url_lines+1] if consecutive_url_lines > 0 else cleaned_lines
+            consecutive_url_lines = 0
+        
+        # Remove lines with excessive navigation/social media content
+        nav_patterns = [
+            r'^\s*\[.*\]\([^)]*share[^)]*\)\s*$',  # Share buttons
+            r'^\s*\[.*\]\([^)]*facebook[^)]*\)\s*$',  # Facebook links
+            r'^\s*\[.*\]\([^)]*twitter[^)]*\)\s*$',  # Twitter links
+            r'^\s*\[.*\]\([^)]*linkedin[^)]*\)\s*$',  # LinkedIn links
+            r'^\s*\[.*\]\([^)]*subscribe[^)]*\)\s*$',  # Subscribe links
+            r'^\s*\[.*\]\([^)]*newsletter[^)]*\)\s*$',  # Newsletter links
+            r'^\s*\[.*\]\([^)]*rss[^)]*\)\s*$',  # RSS links
+            r'^\s*\[.*\]\([^)]*follow[^)]*\)\s*$',  # Follow links
+            r'^\s*\[.*\]\([^)]*advertisement[^)]*\)\s*$',  # Advertisement links
+            r'^\s*\[.*\]\([^)]*doubleclick[^)]*\)\s*$',  # DoubleClick ads
+            r'^\s*\[.*\]\([^)]*utm_[^)]*\)\s*$',  # UTM tracking links
+        ]
+        
+        # Check if line matches navigation patterns
+        is_nav_line = any(re.match(pattern, line, re.IGNORECASE) for pattern in nav_patterns)
+        if is_nav_line:
+            continue
+        
+        # Remove lines with excessive social media indicators
+        social_indicators = [
+            'share on', 'follow us', 'subscribe to', 'newsletter', 'rss feed',
+            'followers', 'subscribers', 'like us', 'tweet this', 'share this',
+            'addthis', 'social media', 'follow @', 'tweet', 'facebook', 'twitter',
+            'linkedin', 'instagram', 'youtube', 'pinterest'
+        ]
+        
+        if any(indicator in line_stripped.lower() for indicator in social_indicators):
+            continue
+        
+        # Remove lines with excessive navigation indicators
+        nav_indicators = [
+            'you are here:', 'breadcrumb', 'navigation', 'menu', 'home',
+            'about', 'contact', 'search', 'login', 'register', 'sign up',
+            'sign in', 'logout', 'profile', 'account', 'settings',
+            # WSJ specific
+            'dow jones', 'news corp', 'wall street journal', 'wsj',
+            'today\'s paper', 'show all sections', 'hide all sections',
+            'aim higher, reach further', 'get the wall street journal',
+            'subscribe now', 'regions', 'blogs', 'sections', 'more',
+            'columns & blogs', 'journal report', 'what\'s news podcast',
+            'washington wire', 'tech/wsj.d', 'industries', 'bankruptcy beat',
+            'billion dollar startup club', 'tech video', 'tech podcast',
+            'startup stock trader', 'heard on the street', 'moneybeat',
+            'wealth adviser', 'best of the web', 'columnists', 'morning editorial report',
+            'peggy noonan', 'opinion video', 'potomac watch podcast',
+            'foreign edition podcast', 'real estate video', 'save article',
+            'text size', 'regular', 'medium', 'large', 'google+', 'print',
+            'by', 'independent of the wall street journal newsroom',
+            'economy & politics', 'gatsby-esque mansion', 'edition:', 'u.s.',
+            'wsj membership', 'digital subscription', 'print subscription',
+            'print and digital subscription', 'why subscribe?', 'download wsj apps',
+            'corporate subscriptions', 'professor journal', 'student journal',
+            'customer service', 'live help', 'redesign guided tour',
+            'dow jones products', 'dow jones & company', 'inc. all rights reserved'
+        ]
+        
+        if any(indicator in line_stripped.lower() for indicator in nav_indicators):
+            continue
+        
+        # Remove lines with excessive advertising indicators
+        ad_indicators = [
+            'advertisement', 'sponsored', 'promoted', 'affiliate', 'partner',
+            'banner', 'popup', 'overlay', 'doubleclick', 'google ads',
+            'amazon ads', 'facebook ads', 'twitter ads',
+            # Financial data and market indicators (often boilerplate)
+            '▲', '▼', 'yield', 'points', 'basis points',
+            # Cookie and privacy notices
+            'we use cookies', 'cookie policy', 'privacy policy', 'terms of service',
+            'by using our website', 'browser capability checks', 'flash for video',
+            'ad blocking', 'you agree to our use'
+        ]
+        
+        if any(indicator in line_stripped.lower() for indicator in ad_indicators):
+            continue
+        
+        # Remove lines with excessive tracking/analytics indicators
+        tracking_indicators = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+            'gclid', 'fbclid', 'msclkid', 'trk', 'tracking', 'analytics',
+            'google analytics', 'facebook pixel', 'twitter pixel'
+        ]
+        
+        if any(indicator in line_stripped.lower() for indicator in tracking_indicators):
+            continue
+        
+        # Remove lines that are mostly links (more than 70% of content is links)
+        link_count = len(re.findall(r'\[([^\]]+)\]\([^)]+\)', line_stripped))
+        word_count = len(line_stripped.split())
+        if word_count > 0 and link_count / word_count > 0.7:
+            continue
+        
+        # Remove lines with excessive punctuation (likely navigation)
+        if len(re.findall(r'[|•·▪▫]', line_stripped)) > 3:
+            continue
+        
+        # Remove lines that are just stock market data or financial indicators
+        if re.match(r'^[\d,]+\.?\d*\s*[▲▼]?\s*\d*\.?\d*%?\s*$', line_stripped):
+            continue
+        
+        # Remove lines that are just author names or bylines without content
+        if re.match(r'^(by|By)\s*$', line_stripped) or re.match(r'^[A-Za-z\s,]+The Wall Street Journal\s*$', line_stripped):
+            continue
+        
+        # Remove lines that are just section headers without content
+        if re.match(r'^(previous|next|save article|text size|regular|medium|large|google\+|print)\s*$', line_stripped, re.IGNORECASE):
+            continue
+        
+        # Keep paywall notices and subscription prompts (they indicate real content)
+        if re.search(r'(subscribe|sign in|to read the full story|paywall|premium)', line_stripped, re.IGNORECASE):
+            # This is a paywall notice, keep it
+            pass
+        elif re.search(r'(mailto:|@)', line_stripped) and len(line_stripped) < 50:
+            # Skip short email addresses or mailto links
+            continue
+        elif re.search(r'\[.*mailto:.*\]', line_stripped) and len(line_stripped) > 100:
+            # This is a mailto link containing article content, extract and keep the content
+            # Extract text between brackets and parentheses
+            import re
+            content_match = re.search(r'\[([^\]]+)\]\([^)]+\)', line_stripped)
+            if content_match:
+                article_content = content_match.group(1)
+                # Keep the article content
+                cleaned_lines.append(article_content)
+            continue
+        elif re.search(r'\[.*\]\(mailto:.*\)', line_stripped) and len(line_stripped) > 100:
+            # This is a mailto link containing article content, extract and keep the content
+            import re
+            content_match = re.search(r'\[([^\]]+)\]\([^)]+\)', line_stripped)
+            if content_match:
+                article_content = content_match.group(1)
+                # Keep the article content
+                cleaned_lines.append(article_content)
+            continue
+        elif re.search(r'\[.*\]\(mailto:\)', line_stripped) and len(line_stripped) > 100:
+            # This is a mailto link containing article content, extract and keep the content
+            import re
+            content_match = re.search(r'\[([^\]]+)\]\([^)]+\)', line_stripped)
+            if content_match:
+                article_content = content_match.group(1)
+                # Keep the article content
+                cleaned_lines.append(article_content)
+            continue
+        elif re.search(r'\[.*\]\(mailto:\)', line_stripped) and len(line_stripped) > 50:
+            # This is a mailto link containing article content, extract and keep the content
+            import re
+            content_match = re.search(r'\[([^\]]+)\]\([^)]+\)', line_stripped)
+            if content_match:
+                article_content = content_match.group(1)
+                # Keep the article content
+                cleaned_lines.append(article_content)
+            continue
+        
+        # Keep lines that contain substantial article content (even if mixed with boilerplate)
+        if re.search(r'(said|according to|reported|announced|declared|stated|explained|added|noted|observed)', line_stripped, re.IGNORECASE):
+            # This looks like article content, keep it
+            pass
+        elif re.search(r'(interview|meeting|conference|speech|statement|press release)', line_stripped, re.IGNORECASE):
+            # This looks like article content, keep it
+            pass
+        elif re.search(r'(prime minister|president|leader|government|minister|official)', line_stripped, re.IGNORECASE):
+            # This looks like political content, keep it
+            pass
+        elif re.search(r'(european union|eu|politics|political|election|vote)', line_stripped, re.IGNORECASE):
+            # This looks like political content, keep it
+            pass
+        elif re.search(r'(economic growth|employment|structural|overhaul)', line_stripped, re.IGNORECASE):
+            # This looks like economic content, keep it
+            pass
+        
+        # Remove lines that are mostly special characters
+        special_char_count = len(re.findall(r'[^\w\s]', line_stripped))
+        if len(line_stripped) > 0 and special_char_count / len(line_stripped) > 0.5:
+            continue
+        
+        # Keep the line if it passes all filters
+        cleaned_lines.append(line)
+    
+    # Join and clean up
+    cleaned_content = '\n'.join(cleaned_lines)
+    cleaned_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_content)
+    cleaned_content = cleaned_content.strip()
+    
+    return cleaned_content
+
+
+def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
+    """Enhanced web clipping cleaner with aggressive boilerplate removal."""
+    import re
+    
+    # Always clean content if it has web indicators - no early returns
     is_web_clipping = False
     if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
         is_web_clipping = True
     else:
         # Check for HTML content in body
-        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
+        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=', 'http://', 'https://']
         is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
     
-    if not is_web_clipping:
-        return content
-    
     # Check if content is heavily HTML-based or Markdown-based
-    # HTML indicators: <div, <span, <p class=, etc.
     html_tag_count = len(re.findall(r'<(div|span|article|section|header|footer|nav|p class=)', content, re.IGNORECASE))
     
     # Check for navigation clutter indicators (even in markdown)
-    navigation_clutter = len(re.findall(r'(share|facebook|twitter|linkedin|subscribe|newsletter|home|menu|search|contact|advertise|cookie|consent|policy|privacy|terms|legal|disclaimer|skip|jump|maincontent|mainnav|subnav|topnav|sitesearch|footer|doubleclick|ad\.|advertisement|banner)', content.lower()))
+    navigation_clutter = len(re.findall(r'(share|facebook|twitter|linkedin|subscribe|newsletter|home|menu|search|contact|advertise|cookie|consent|policy|privacy|terms|legal|disclaimer|skip|jump|maincontent|mainnav|subnav|topnav|sitesearch|footer|doubleclick|ad\.|advertisement|banner|rss|follow|followers|subscribers)', content.lower()))
     
-    # If heavily HTML-based OR has navigation clutter, use Trafilatura/Readability
-    if html_tag_count > 5 or navigation_clutter > 10:
+    # Always try aggressive cleaning for web content
+    if is_web_clipping or html_tag_count > 2 or navigation_clutter > 5:
         # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
         extracted = extract_content_with_trafilatura_v2(content)
         if extracted:
             # Apply section-based cleaning even after Trafilatura
             cleaned_content = remove_web_clipping_sections(extracted)
+            # Apply additional aggressive cleaning
+            cleaned_content = apply_aggressive_cleaning(cleaned_content)
             return cleaned_content
         
         # Fallback to Readability
@@ -1398,6 +1697,8 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
         if extracted:
             # Apply section-based cleaning even after Readability
             cleaned_content = remove_web_clipping_sections(extracted)
+            # Apply additional aggressive cleaning
+            cleaned_content = apply_aggressive_cleaning(cleaned_content)
             return cleaned_content
         
         # If both fail for HTML content
@@ -1405,9 +1706,11 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
             cleaned_content = clean_heavily_html_structured(content, frontmatter)
             # Apply section-based cleaning
             cleaned_content = remove_web_clipping_sections(cleaned_content)
+            # Apply additional aggressive cleaning
+            cleaned_content = apply_aggressive_cleaning(cleaned_content)
             return cleaned_content
     
-    # For Markdown-based content (no/few HTML tags), skip Trafilatura and use pattern-based cleaning
+    # For Markdown-based content (no/few HTML tags), use pattern-based cleaning
     # Convert HTML tables to Markdown first
     content = convert_html_tables_to_markdown(content)
     
@@ -1416,5 +1719,8 @@ def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
     
     # Apply aggressive section-based cleaning for web clippings
     cleaned_content = remove_web_clipping_sections(cleaned_content)
+    
+    # Apply additional aggressive cleaning
+    cleaned_content = apply_aggressive_cleaning(cleaned_content)
     
     return cleaned_content

@@ -21,6 +21,10 @@ def calculate_content_richness(text, title, meta):
         'director', 'comercial', 'manager', 'ceo', 'cto', 'cfo',
         # Bills and invoices
         'bill', 'invoice', 'factura', 'movistar', 'adsl',
+        # Personal certificates and IDs
+        'padi', 'certification', 'certificate', 'card', 'temporary card', 'membership',
+        'diving', 'scuba', 'diver', 'instructor', 'license', 'permit',
+        'passport', 'visa', 'id card', 'identification', 'driving license',
         # Simple lists without analysis
         'clientes', 'customers', 'companies', 'empresas',
         # Software documentation and tools
@@ -30,7 +34,14 @@ def calculate_content_richness(text, title, meta):
         'website', 'homepage', 'navigation', 'menu', 'footer', 'header',
         'about us', 'contact us', 'get in touch', 'our team', 'office locations',
         # Personal content
-        'audio', 'video', 'reminder', 'todo', 'task', 'personal', 'wallet', 'recovery'
+        'audio', 'video', 'reminder', 'todo', 'task', 'personal', 'wallet', 'recovery',
+        # Award letters and notifications
+        'award', 'medal', 'letter', 'notification', 'congratulations', 'recognition',
+        'outstanding contribution', 'achievement', 'honor', 'prize', 'trophy',
+        # Empty notebook pages and minimal content
+        'notebook', 'page', 'empty', 'minimal', 'brief', 'short note',
+        # Corporate usernames and account info
+        'username', 'account', 'login', 'password', 'user', 'corporate account'
     ]
     
     # If it looks like low-value content, heavily penalize
@@ -192,16 +203,21 @@ Examples: "Generic project management tips", "Software vendor marketing"
 • Administrative logs: daily activity lists, task tracking, meeting schedules WITHOUT insights
 • Old project-specific meeting notes (>5 years) with only logistics/scheduling, no sector insights
 • Personal receipts, invoices, bills, travel bookings
+• Personal certificates and IDs: PADI cards, diving certificates, membership cards, licenses, permits
+• Business cards, contact information, personal details, and professional networking content
+• Award letters, medal notifications, congratulations, and recognition letters
+• Empty notebook pages, minimal content, and brief notes without analysis
+• Corporate usernames, account information, and login details
 • Software installation guides (unless infrastructure-specific tools)
 • Corrupted content, empty files, pure navigation elements
 • Unclear OCR text with garbled characters, random symbols, or nonsensical content
-Examples: "April 3rd - Finished PASTAS letter, emailed Brett, reviewed memo", "ai ail aD 4 ap ay i 12SDP KICK -oEE Me ERTNG", "Land acquisition expected to start February 2015"
+Examples: "April 3rd - Finished PASTAS letter, emailed Brett, reviewed memo", "ai ail aD 4 ap ay i 12SDP KICK -oEE Me ERTNG", "PADI Temporary Card", "Diving Certificate", "Membership Card", "Business Card", "Award Letter", "Notebook Page", "Corporate Username"
 
 IMPORTANT: Industry news about energy, transport, water, policy, etc. should score AT LEAST 0.45 (medium value). Only administrative/personal content should score below 0.25.
 
 CRITICAL: Personal notes WITH professional analysis/insights ARE valuable. Only discard administrative/logistical tracking.
 
-ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value from title alone. Do NOT infer professional expertise or project involvement from names, titles, or locations. Business cards, contact info, and personal details score LOW unless they contain substantial professional insights.
+ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value from title alone. Do NOT infer professional expertise or project involvement from names, titles, or locations. Business cards, contact info, personal certificates (PADI, diving, membership cards), award letters, notebook pages, and personal details score LOW unless they contain substantial professional insights.
 
 Return JSON: {{"usefulness": 0.xx, "reasoning": "2-3 sentences explaining score based on knowledge reusability"}}"""
 
