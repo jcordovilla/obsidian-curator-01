@@ -11,7 +11,7 @@ from .extractors import extract_content
 from .analyze import analyze_features, score_usefulness, decide
 from .classify import classify_json
 from .summarize import summarize_content
-from .writer import write_curated_note
+from .writer import write_curated_note, write_triage_note
 from .store import EmbeddingIndex, Manifest
 from .utils import iter_markdown_notes, parse_front_matter
 
@@ -43,7 +43,8 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
 
     if not dry_run:
         os.makedirs(out_notes, exist_ok=True)
-        EmbeddingIndex.init('.metadata/faiss.index', model=cfg['models']['embed'])
+        embed_dims = cfg['models'].get('embed_dims', 1536)  # Default to OpenAI dims
+        EmbeddingIndex.init('.metadata/faiss.index', model=cfg['models']['embed'], embed_dims=embed_dims)
         Manifest.init('.metadata/manifest.jsonl')
 
     for note_path in iter_markdown_notes(vault):
@@ -51,6 +52,12 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             meta, body = parse_front_matter(note_path)
             assets = detect_assets(body, attachments)
             primary = choose_primary(assets, body, cfg['priorities'])
+            
+            # Skip audio files for now (placeholder transcription not useful)
+            if primary['kind'] == 'audio':
+                logger.info(f'SKIP: Audio file not yet supported: {note_path}')
+                continue
+            
             content = extract_content(primary, assets, body, meta.get('language'), attachments, note_path)
             
             # Let the LLM decide on content quality - no early filtering
@@ -71,24 +78,29 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             if decision == 'triage':
                 if not dry_run:
                     enqueue_triage(note_path, feats, score)
-                    # Copy triaged notes to triage folder for manual review
+                    # Copy triaged notes to triage folder with rich metadata for manual review
                     import shutil
                     triage_dir = cfg['paths']['out_notes'].replace('/notes', '/triage')
                     os.makedirs(triage_dir, exist_ok=True)
                     triage_path = os.path.join(triage_dir, os.path.basename(note_path))
-                    shutil.copy2(note_path, triage_path)
+                    
+                    # Create enhanced triage note with rich metadata
+                    write_triage_note(note_path, meta, cats, tags, ents, content, score, cfg, attachments)
                 logger.info(f'TRIAGE: {note_path} (score={score:.3f})'); continue
             if decision == 'discard':
                 logger.info(f'DISCARD: {note_path} (score={score:.3f})'); continue
                 
             # Generate summary for kept notes
             summary = summarize_content(content, meta, cats, cfg)
+            if not summary or len(summary.strip()) < 10:
+                logger.warning(f'Empty or minimal summary generated for {note_path}: {len(summary)} chars')
             
             if not dry_run:
                 write_curated_note(note_path, meta, cats, tags, ents, summary, content, score, cfg, attachments)
                 # Use the embedding from features analysis (not content dict)
                 EmbeddingIndex.add(note_path, feats.get('embedding'))
-                Manifest.update(note_path, score, decision, primary)
+                # Enhanced manifest with instrumentation
+                Manifest.update(note_path, score, decision, primary, features=feats, categories=cats)
             logger.success(f'KEPT{ " (dry-run)" if dry_run else "" }: {note_path} (score={score:.3f})')
         except Exception as e:
             logger.exception(f'Error processing {note_path}: {e}')

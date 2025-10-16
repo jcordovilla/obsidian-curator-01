@@ -8,10 +8,17 @@ class EmbeddingIndex:
     note_paths = []
     
     @classmethod
-    def init(cls, path, model):
-        """Initialize FAISS index for semantic search."""
+    def init(cls, path, model, embed_dims=1536):
+        """Initialize FAISS index for semantic search.
+        
+        Args:
+            path: Path to index file
+            model: Model identifier (for tracking)
+            embed_dims: Embedding dimensions (1536 for text-embedding-3-small, 768 for nomic-embed-text)
+        """
         cls.path = path
         cls.model = model
+        cls.embed_dims = embed_dims
         cls.note_paths = []
         os.makedirs(os.path.dirname(path), exist_ok=True)
         
@@ -33,8 +40,8 @@ class EmbeddingIndex:
         if cls.index is None:
             try:
                 import faiss
-                # Use 768 dimensions for nomic-embed-text embeddings
-                cls.index = faiss.IndexFlatL2(768)
+                # Use configurable dimensions (1536 for OpenAI, 768 for nomic)
+                cls.index = faiss.IndexFlatL2(embed_dims)
             except ImportError:
                 print("Warning: FAISS not installed. Embeddings will not be persisted.")
                 cls.index = None
@@ -42,7 +49,12 @@ class EmbeddingIndex:
     @classmethod
     def add(cls, note_path, embedding):
         """Add note embedding to FAISS index and persist."""
-        if cls.index is None or embedding is None:
+        if cls.index is None:
+            print(f"Warning: FAISS index not initialized, skipping embedding storage")
+            return
+            
+        if embedding is None:
+            print(f"Warning: No embedding provided for {note_path}, skipping")
             return
         
         try:
@@ -51,9 +63,15 @@ class EmbeddingIndex:
             if isinstance(embedding, list):
                 embedding = np.array(embedding, dtype=np.float32)
             elif not isinstance(embedding, np.ndarray):
+                print(f"Warning: Embedding is not list or array: {type(embedding)}")
                 return
             
-            # Ensure correct shape (1, 768)
+            # Ensure correct shape - use dynamic dims from class
+            expected_dims = getattr(cls, 'embed_dims', 1536)
+            if embedding.shape[0] != expected_dims:
+                print(f"Warning: Embedding has {embedding.shape[0]} dims, expected {expected_dims}")
+                return
+                
             if embedding.ndim == 1:
                 embedding = embedding.reshape(1, -1)
             
@@ -80,6 +98,34 @@ class Manifest:
             open(path, 'w', encoding='utf-8').close()
 
     @classmethod
-    def update(cls, note_path, score, decision, primary):
+    def update(cls, note_path, score, decision, primary, features=None, categories=None):
+        """
+        Update manifest with enhanced instrumentation.
+        
+        Args:
+            note_path: Path to note
+            score: Final usefulness score
+            decision: keep/discard/triage
+            primary: Primary content type
+            features: Optional dict with llm_usefulness, content_richness, reasoning
+            categories: Optional list of assigned categories
+        """
+        entry = {
+            "note": note_path,
+            "score": score,
+            "decision": decision,
+            "primary": primary
+        }
+        
+        # Add instrumentation data if available
+        if features:
+            entry["llm_score"] = features.get('llm_usefulness')
+            entry["heuristic_score"] = features.get('content_richness')
+            entry["reasoning"] = features.get('reasoning')
+            entry["length_chars"] = features.get('length_chars')
+        
+        if categories:
+            entry["categories"] = categories
+        
         with open(cls.path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps({"note": note_path, "score": score, "decision": decision, "primary": primary})+"\\n")
+            f.write(json.dumps(entry, ensure_ascii=False) + "\\n")

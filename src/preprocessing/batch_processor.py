@@ -291,10 +291,10 @@ class BatchProcessor:
                     result['web_enhancement_error'] = str(e)
             
             elif category == 'pdf_annotation':
-                # Minimal processing for PDF annotations
-                processed_content = self._clean_pdf_annotation(content)
+                # Extract PDF content while preserving original note structure
+                processed_content = self._process_pdf_note(content, file_path, result)
                 if processed_content != original_content:
-                    result['changes_made'].append('pdf_annotation_cleaned')
+                    result['changes_made'].append('pdf_content_extracted')
             
             elif category == 'audio_annotation':
                 # Minimal processing for audio annotations
@@ -373,6 +373,48 @@ class BatchProcessor:
             result['error'] = str(e)
             result['processing_time'] = time.time() - start_time
             return result
+    
+    def _process_pdf_note(self, content: str, file_path: str, result: dict) -> str:
+        """Process PDF notes by extracting content while preserving original structure."""
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'curation', 'obsidian_curator'))
+        
+        try:
+            from extractors import extract_pdf
+            
+            # Find PDF attachment in the note
+            pdf_match = re.search(r'!\[\[attachments/([^]]+\.pdf)\]\]', content)
+            if not pdf_match:
+                # No PDF found, just clean up whitespace
+                return self._clean_pdf_annotation(content)
+            
+            pdf_filename = pdf_match.group(1)
+            
+            # Construct full path to PDF
+            note_dir = os.path.dirname(file_path)
+            pdf_path = os.path.join(note_dir, 'attachments', pdf_filename)
+            
+            if not os.path.exists(pdf_path):
+                result['pdf_extraction_error'] = f"PDF file not found: {pdf_path}"
+                return self._clean_pdf_annotation(content)
+            
+            # Extract PDF content
+            pdf_content = extract_pdf(pdf_path, max_pages=20, max_chars=8000)
+            
+            if pdf_content and len(pdf_content.strip()) > 100:
+                # Add PDF content to the note while preserving original structure
+                enhanced_content = content + "\n\n## PDF Content\n\n" + pdf_content
+                result['pdf_extracted'] = True
+                result['pdf_content_length'] = len(pdf_content)
+                return enhanced_content
+            else:
+                result['pdf_extraction_warning'] = "PDF content extraction failed or returned minimal content"
+                return self._clean_pdf_annotation(content)
+                
+        except Exception as e:
+            result['pdf_extraction_error'] = str(e)
+            return self._clean_pdf_annotation(content)
     
     def _clean_pdf_annotation(self, content: str) -> str:
         """Minimal cleaning for PDF annotation notes."""

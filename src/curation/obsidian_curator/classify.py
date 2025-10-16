@@ -1,5 +1,8 @@
 from .llm import chat_json
 
+# Import Pydantic schemas for validation
+from .schemas import ClassificationResponse
+
 # Unified Professional Context for all agents
 PROFESSIONAL_CONTEXT = """You are an AI assistant for a Senior Infrastructure Investment Specialist and Chartered Civil Engineer who:
 - Writes specialized articles and publications for industry journals
@@ -19,22 +22,9 @@ QUALITY STANDARDS: Content must be:
 - Professionally relevant to infrastructure investment
 - Citation-ready with proper source documentation"""
 
-CLASSIFY_SYS = f"""{PROFESSIONAL_CONTEXT}
+CLASSIFY_SYS = """Classify infrastructure content for a professional knowledge base.
 
-CLASSIFICATION ROLE: You classify content for this specialized knowledge database.
-Align with strict professional relevance: require concrete substance (data, methods, frameworks, case evidence, legislation, contracts). Be conservative and avoid keyword-only matches.
-
-CRITICAL ANTI-FABRICATION RULES:
-- NEVER invent, assume, or infer content not explicitly present in the provided text
-- NEVER add professional context, background, or interpretation beyond what is stated
-- NEVER reference external sources, studies, or organizations not mentioned in the text
-- If content is insufficient for proper classification, state this honestly
-- Base ALL assessments strictly on the provided document metadata and content
-- Every classification decision must be directly traceable to the source material
-
-CRITICAL: You MUST use ONLY the infrastructure taxonomy categories below. Do NOT create new categories or use geographic regions as categories.
-
-INFRASTRUCTURE TAXONOMY CATEGORIES (select 1-3 only):
+Use ONLY these categories (select 1-3):
 - Infrastructure Investment: Core investment strategies, funding mechanisms, financial structures
 - PPP/P3: Public-private partnerships, concession models, collaborative frameworks
 - Concessions: Long-term infrastructure concessions, operational agreements
@@ -61,12 +51,13 @@ INFRASTRUCTURE TAXONOMY CATEGORIES (select 1-3 only):
 - ESG & Sustainability: Environmental, social, governance factors, sustainable development
 - Climate Resilience: Climate adaptation, environmental sustainability, green infrastructure
 - Innovation & R&D: Research and development, technological innovation, pilot projects
-- Capacity Building: Skills development, institutional strengthening, knowledge transfer
+- Capacity Building
 
-GEOGRAPHIC REGIONS (use as tags/entities, NOT categories):
-- Spain, Europe, LATAM, International Development, Africa, Asia, North America
+Tags: 5-10 professional terms (lowercase, hyphenated).
+Entities: Extract organizations, projects, technologies, locations (max 6 each).
+Publication_readiness: Score 0-1 for citation quality.
 
-Return strict JSON only (no prose, no markdown, no code fences)."""
+Return JSON with: categories (array), tags (array), entities (object), publication_readiness (number)."""
 
 def classify_json(content, meta, cfg):
     text = content.get('text','')[:4000]
@@ -78,52 +69,51 @@ def classify_json(content, meta, cfg):
     date_created = meta.get('date created', 'Unknown')
     date_modified = meta.get('date modified', 'Unknown')
     
-    # Enhanced prompt with unified professional context
-    user = f"""Classify this content for a specialized knowledge database supporting professional publication writing.
-
-DOCUMENT METADATA:
-Title: {title}
+    # Streamlined prompt for GPT-5 compatibility
+    user = f"""Title: {title}
 Source: {source}
 Language: {language}
-Created: {date_created}
-Modified: {date_modified}
 
-CONTENT: {text}
+Content: {text}
 
-EVALUATION CRITERIA:
-Assess content for potential use in specialized articles and publications. Only assign high relevance when material contains concrete professional substance suitable for citation in academic or industry publications.
+Classify for infrastructure knowledge base. Return JSON with:
+- categories: 1-3 from taxonomy
+- tags: 5-10 professional terms  
+- entities: {{organizations, projects, technologies, locations}}
+- publication_readiness: 0-1 score
 
-CRITICAL CLASSIFICATION RULES:
-- Use ONLY the infrastructure taxonomy categories defined in the system prompt
-- Select 1-3 categories that best match the content's primary focus
-- Put geographic regions (Spain/Europe/LATAM/Africa) in tags/entities, NOT categories
-- Tags: 5-10 specific, professional terms, lower-case, hyphenated (e.g., "project-finance", "due-diligence", "ppp-contract")
-- Entities: Extract organizations, projects, technologies, locations (0-6 each), use canonical names
+Readiness scoring:
+- 0.8+: Primary sources, research, legislation
+- 0.6-0.8: Professional analysis, case studies
+- 0.4-0.6: Background material
+- <0.4: Personal notes, marketing
 
-PUBLICATION READINESS SCORING (0-1):
-- CITATION-READY (≥0.80): Primary sources, research reports, legislation, technical standards with clear attribution
-- PROFESSIONAL ANALYSIS (0.60-0.79): Secondary analysis, expert commentary, case studies with substantial detail
-- BACKGROUND MATERIAL (0.40-0.59): General information, basic explanations, limited technical depth
-- UNSUITABLE (≤0.39): Personal notes, marketing materials, incomplete information, no clear source
-
-Special caps:
-- Content <100 words or mostly boilerplate: cap at 0.40
-- Only links/placeholders without substance: cap at 0.25
-- No clear source attribution: reduce score by 0.15
-
-Return JSON with exactly:
-- "categories": List of 1-3 infrastructure taxonomy categories from system prompt
-- "tags": List of 5-10 professional tags
-- "entities": Object with "organizations", "projects", "technologies", "locations" arrays
-- "publication_readiness": Score 0-1 for suitability in professional publications
-
-Return strict JSON only."""
+Return JSON only."""
     
-    data = chat_json(cfg['models']['fast'], system=CLASSIFY_SYS, user=user, tokens=600, temp=0.25)
-    cats = data.get('categories',[])
-    tags = data.get('tags',[])
-    ents = data.get('entities',{})
-    # Use publication_readiness as the relevance score for downstream processing
-    pub_readiness = data.get('publication_readiness', 0.5)
+    provider = cfg['models'].get('provider', 'openai')
+    data = chat_json(
+        cfg['models']['fast'], 
+        system=CLASSIFY_SYS, 
+        user=user, 
+        tokens=600, 
+        temp=0.25,
+        provider=provider
+    )
     
-    return cats, tags, ents, pub_readiness
+    # Validate with Pydantic schema
+    try:
+        validated = ClassificationResponse(**data)
+        return (
+            validated.categories,
+            validated.tags,
+            validated.entities.model_dump(),
+            validated.publication_readiness
+        )
+    except Exception as validation_error:
+        print(f"Warning: Classification schema validation failed: {validation_error}")
+        # Fall back to manual parsing
+        cats = data.get('categories',[])
+        tags = data.get('tags',[])
+        ents = data.get('entities',{})
+        pub_readiness = data.get('publication_readiness', 0.5)
+        return cats, tags, ents, pub_readiness

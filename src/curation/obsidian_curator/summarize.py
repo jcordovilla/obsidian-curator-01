@@ -83,7 +83,8 @@ Assess value based ONLY on what is described in the text extract. If the extract
 
 FINAL CHECK: Ensure every claim in your summary can be traced directly to the provided text extract. Do not add context, background, or elaboration not present in the source."""
 
-        return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900, temp=0.2)
+        provider = cfg['models'].get('provider', 'openai')
+        return chat_text(cfg['models']['main'], system=SUM_SYS, user=prompt, tokens=900, temp=0.2, provider=provider)
         
     if kind=='image':
         prompt = f"""Summarize this image and any OCR'd text for an infrastructure expert. Be precise and avoid speculation.
@@ -105,7 +106,8 @@ Provide:
 
 Do not invent contextual history or attribution. If OCR is empty, clearly state that and describe only visual features."""
         
-        return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=500, temp=0.2)
+        provider = cfg['models'].get('provider', 'openai')
+        return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=500, temp=0.2, provider=provider)
         
     # Text content
     prompt = f"""CRITICAL ANTI-FABRICATION INSTRUCTIONS:
@@ -139,4 +141,5 @@ Assess based ONLY on what is actually described in the content. If the content l
 
 VERIFICATION REQUIREMENT: Every statement in your summary must be directly traceable to the provided content. Do not add professional interpretation, context, or elaboration beyond what is explicitly stated."""
     
-    return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=400, temp=0.2)
+    provider = cfg['models'].get('provider', 'openai')
+    return chat_text(cfg['models']['fast'], system=SUM_SYS, user=prompt, tokens=400, temp=0.2, provider=provider)

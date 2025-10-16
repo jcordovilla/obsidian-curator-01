@@ -4,6 +4,9 @@ from .llm import embed_text, chat_json
 # Import unified professional context
 from .classify import PROFESSIONAL_CONTEXT
 
+# Import Pydantic schemas for validation
+from .schemas import UsefulnessResponse
+
 def calculate_content_richness(text, title, meta):
     """Calculate content richness considering content type and quality."""
     # Basic length-based richness
@@ -41,13 +44,22 @@ def calculate_content_richness(text, title, meta):
         # Empty notebook pages and minimal content
         'notebook', 'page', 'empty', 'minimal', 'brief', 'short note',
         # Corporate usernames and account info
-        'username', 'account', 'login', 'password', 'user', 'corporate account'
+        'username', 'account', 'login', 'password', 'user', 'corporate account',
+        # Meeting notes and administrative content
+        'meeting', 'reunión', 'minutes', 'actas', 'agenda', 'notes', 'notas',
+        'internal', 'interna', 'administrative', 'administrativo', 'log', 'registro',
+        'preliminary considerations', 'consideraciones preliminares'
     ]
     
     # If it looks like low-value content, heavily penalize
     if any(indicator in title_lower or indicator in text_lower for indicator in low_value_indicators):
         # Low-value content should have very low richness
         return min(0.1, length_richness * 0.1)
+    
+    # Special handling for meeting notes - be extra harsh
+    meeting_indicators = ['meeting', 'reunión', 'minutes', 'actas', 'agenda', 'preliminary considerations']
+    if any(indicator in title_lower or indicator in text_lower for indicator in meeting_indicators):
+        return min(0.05, length_richness * 0.05)
     
     # Check for content that's just lists or names without analysis
     if len(text) < 200 and (text.count('\n- ') > 5 or text.count('\n* ') > 5):
@@ -81,6 +93,33 @@ def calculate_content_richness(text, title, meta):
         structure_score += 0.2
     if text.count('\n\n') > 2:  # Has paragraphs
         structure_score += 0.1
+    
+    # Boost technical and research content
+    technical_indicators = [
+        # Technical documentation
+        'data warehousing', 'sensor', 'sensing', 'monitoring', 'analysis', 'algorithm',
+        'quantum', 'cryptography', 'encryption', 'satellite', 'network', 'protocol',
+        'infrastructure', 'investment', 'portfolio', 'financial', 'market', 'sector',
+        # Research and analysis
+        'study', 'research', 'analysis', 'report', 'findings', 'methodology',
+        'statistical', 'data', 'metrics', 'performance', 'efficiency', 'optimization',
+        # Technology and innovation
+        'technology', 'innovation', 'development', 'implementation', 'system', 'platform',
+        'software', 'hardware', 'digital', 'automation', 'integration', 'architecture'
+    ]
+    
+    technical_score = 0
+    for indicator in technical_indicators:
+        if indicator in text_lower:
+            technical_score += 0.1
+    
+    # Cap technical boost to avoid over-scoring, but be more generous
+    technical_score = min(0.4, technical_score)
+    structure_score += technical_score
+    
+    # Additional boost for technical documentation with good structure
+    if technical_score > 0.2 and text.count('\n## ') > 0:
+        structure_score += 0.2  # Extra boost for well-structured technical content
     
     # Check for professional content indicators (MULTILINGUAL)
     professional_indicators_en = [
@@ -140,8 +179,8 @@ def calculate_content_richness(text, title, meta):
 def get_llm_usefulness_score(text, title, meta, cfg):
     """Single-pass LLM assessment of content usefulness for knowledge base."""
     
-    # Truncate text for LLM processing
-    text_sample = text[:3500] if len(text) > 3500 else text
+    # Truncate text for LLM processing (OpenAI handles longer contexts better)
+    text_sample = text[:8000] if len(text) > 8000 else text
     
     # Extract metadata
     source = meta.get('source', 'Not specified')
@@ -222,16 +261,30 @@ ANTI-HALLUCINATION: Base score ONLY on provided content. Do NOT assume value fro
 Return JSON: {{"usefulness": 0.xx, "reasoning": "2-3 sentences explaining score based on knowledge reusability"}}"""
 
     try:
-        result = chat_json(cfg['models']['main'], 
-                          system="You evaluate infrastructure consultant's content. Return strict JSON only.",
-                          user=prompt, 
-                          tokens=300, 
-                          temp=0.15)
+        provider = cfg['models'].get('provider', 'openai')
+        result = chat_json(
+            cfg['models']['main'], 
+            system="You evaluate infrastructure consultant's content. Return strict JSON only.",
+            user=prompt, 
+            tokens=300, 
+            temp=0.15,
+            provider=provider
+        )
         
-        return {
-            'usefulness': min(1.0, max(0.0, result.get('usefulness', 0.4))),
-            'reasoning': result.get('reasoning', 'No reasoning provided')
-        }
+        # Validate with Pydantic schema
+        try:
+            validated = UsefulnessResponse(**result)
+            return {
+                'usefulness': validated.usefulness,
+                'reasoning': validated.reasoning
+            }
+        except Exception as validation_error:
+            print(f"Warning: Schema validation failed: {validation_error}")
+            # Fall back to manual validation
+            return {
+                'usefulness': min(1.0, max(0.0, result.get('usefulness', 0.4))),
+                'reasoning': result.get('reasoning', 'No reasoning provided')
+            }
     except Exception as e:
         print(f"Warning: LLM scoring failed: {e}")
         return {
@@ -240,21 +293,39 @@ Return JSON: {{"usefulness": 0.xx, "reasoning": "2-3 sentences explaining score 
         }
 
 def analyze_features(content, meta, cfg):
-    """Simplified single-pass content analysis."""
+    """Combined heuristic and LLM-based content analysis."""
     text = content.get('text','')
     title = meta.get('title', '')
     
-    embedding = embed_text(text, cfg['models']['embed']) if text else None
+    provider = cfg['models'].get('provider', 'openai')
+    embedding = embed_text(text, cfg['models']['embed'], provider=provider) if text else None
     
-    # Single LLM call for usefulness assessment - trust the LLM
+    # Get LLM usefulness score
     llm_result = get_llm_usefulness_score(text, title, meta, cfg)
+    
+    # Calculate heuristic content richness
+    content_richness = calculate_content_richness(text, title, meta)
+    
+    # Combine scores if heuristics are enabled
+    use_heuristics = cfg.get('decision', {}).get('use_heuristics', False)
+    heuristic_weight = cfg.get('decision', {}).get('heuristic_weight', 0.3)
+    
+    if use_heuristics:
+        # Weighted combination: default 70% LLM, 30% heuristic
+        combined_score = (1 - heuristic_weight) * llm_result['usefulness'] + heuristic_weight * content_richness
+        final_usefulness = min(1.0, max(0.0, combined_score))
+    else:
+        # Pure LLM score (legacy behavior)
+        final_usefulness = llm_result['usefulness']
     
     features = {
         'length_chars': len(text),
         'has_numbers': any(ch.isdigit() for ch in text),
         'sections': text.count('\n## '),
         'embedding': embedding,
-        'usefulness': llm_result['usefulness'],  # Pure LLM score
+        'usefulness': final_usefulness,
+        'llm_usefulness': llm_result['usefulness'],  # Track LLM score separately
+        'content_richness': content_richness,  # Track heuristic score separately
         'reasoning': llm_result['reasoning']
     }
     return features

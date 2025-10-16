@@ -130,11 +130,13 @@ CRITICAL ANTI-FABRICATION RULES:
 - If transcription is insufficient or unclear, state this honestly
 - Every assessment must be directly traceable to the provided transcription"""
             
-            analysis = chat_text('mistral:latest', 
+            # Use OpenAI GPT-5 mini for better multilingual analysis
+            analysis = chat_text('gpt-5-mini-2025-08-07',  # Fast GPT-5 model for analysis
                                system_prompt, 
                                prompt, 
                                tokens=800,  # Increased for comprehensive analysis
-                               temp=0.2)
+                               temp=0.2,
+                               provider='openai')
             return analysis
         else:
             return f"Audio file processed but no transcription extracted from {os.path.basename(abs_path)}"
@@ -231,11 +233,13 @@ CRITICAL ANTI-FABRICATION RULES:
 - If OCR is insufficient or unclear, state this honestly
 - Every assessment must be directly traceable to the visible OCR content"""
             
-            analysis = chat_text('mistral:latest', 
+            # Use OpenAI GPT-5 mini for better multilingual analysis
+            analysis = chat_text('gpt-5-mini-2025-08-07',  # Fast GPT-5 model for analysis
                                system_prompt, 
                                prompt, 
                                tokens=800,  # Increased from 300 to 800 for more comprehensive analysis
-                               temp=0.2)
+                               temp=0.2,
+                               provider='openai')
             return analysis
         else:
             return f"Image ({width}x{height}px) - no readable text found via OCR"
@@ -244,14 +248,14 @@ CRITICAL ANTI-FABRICATION RULES:
         print(f"Warning: Image analysis failed for {abs_path}: {e}")
         return ""
 
-def extract_pdf(abs_path, max_pages=10, max_chars=5000):
+def extract_pdf(abs_path, max_pages=50, max_chars=15000):
     """
-    Extract text from PDF with performance optimizations.
+    Extract text from PDF with improved coverage.
     
     Args:
         abs_path: Path to PDF file
-        max_pages: Maximum pages to process (default 10 for performance)
-        max_chars: Maximum characters to extract (default 5000 for LLM efficiency)
+        max_pages: Maximum pages to process (default 50, increased from 10)
+        max_chars: Maximum characters to extract (default 15000, increased from 5000)
     """
     try:
         doc = fitz.open(abs_path)
@@ -418,13 +422,37 @@ def extract_text(body):
     return {'kind':'text', 'text': clean_markdown_to_text(body)}
 
 def extract_content(primary, assets, body, lang=None, attachments_root=None, note_path=None):
+    # Always extract text content first
+    text_result = extract_text(body)
+    
+    # Check if there are PDF attachments to extract
+    pdf_content = None
+    for asset in assets:
+        if asset['kind'] == 'pdf' and asset['path']:
+            abs_path = resolve_attachment_path(asset['path'], attachments_root, note_path)
+            pdf_result = extract_pdf(abs_path)
+            if pdf_result.get('text', '').strip():
+                pdf_content = pdf_result.get('text', '').strip()
+                break
+    
+    # If we have PDF content, combine it with the original text
+    if pdf_content:
+        combined_text = text_result.get('text', '') + "\n\n## PDF Content\n\n" + pdf_content
+        return {
+            'text': combined_text,
+            'kind': 'pdf_note',
+            'pdf_extracted': True,
+            'original_text_length': len(text_result.get('text', '')),
+            'pdf_text_length': len(pdf_content)
+        }
+    
+    # Handle other primary asset types
     if primary['kind']=='pdf' and primary['path']:
-        # Resolve relative path to absolute path
+        # This case is now handled above, but keep for compatibility
         abs_path = resolve_attachment_path(primary['path'], attachments_root, note_path)
         result = extract_pdf(abs_path)
-        # If PDF extraction failed or returned empty content, fall back to markdown
         if not result.get('text', '').strip():
-            return extract_text(body)
+            return text_result
         return result
     if primary['kind']=='image' and primary['path']:
         # Resolve relative path to absolute path
@@ -432,7 +460,7 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None, not
         result = extract_image(abs_path)
         # If image extraction failed or returned empty content, fall back to markdown
         if not result.get('text', '').strip():
-            return extract_text(body)
+            return text_result
         return result
     if primary['kind']=='audio' and primary['path']:
         # Resolve relative path to absolute path
@@ -440,6 +468,7 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None, not
         result = extract_audio(abs_path)
         # If audio extraction failed or returned empty content, fall back to markdown
         if not result.get('text', '').strip():
-            return extract_text(body)
+            return text_result
         return result
-    return extract_text(body)
+    
+    return text_result

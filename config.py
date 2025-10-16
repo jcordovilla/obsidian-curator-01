@@ -182,16 +182,18 @@ def get_curation_config():
             'test_preprocessed_attachments': TEST_PREPROCESSED_ATTACHMENTS_PATH,
             'test_curated_notes': TEST_CURATED_NOTES_PATH,
             'test_curated_attachments': TEST_CURATED_ATTACHMENTS_PATH,
-            # Legacy aliases for backward compatibility
-            'vault': RAW_VAULT_PATH,
-            'attachments': RAW_ATTACHMENTS_PATH,
+            # FIXED: Default to preprocessed vault for curation input
+            'vault': PREPROCESSED_VAULT_PATH,
+            'attachments': PREPROCESSED_ATTACHMENTS_PATH,
             'out_notes': CURATED_NOTES_PATH,
             'out_assets': CURATED_ATTACHMENTS_PATH
         },
         'models': {
-            'fast': 'llama3.1:8b',  # Upgraded to Llama 3.1:8B for better multilingual support
-            'main': 'llama3.1:8b',
-            'embed': 'nomic-embed-text'
+            'provider': 'openai',  # Use OpenAI instead of Ollama
+            'fast': 'gpt-5-mini-2025-08-07',  # Fast GPT-5 mini for classification/summarization
+            'main': 'gpt-5-2025-08-07',  # Main GPT-5 model for analysis (400K context)
+            'embed': 'text-embedding-3-small',  # OpenAI embeddings (1536 dims)
+            'embed_dims': 1536  # Dimension count for embeddings
         },
         'taxonomy': {
             'categories': [
@@ -219,7 +221,9 @@ def get_curation_config():
         },
     'decision': {
         'keep_threshold': 0.45,  # Keep medium+ value content (0.45-1.0)
-        'gray_margin': 0.20      # Triage zone (0.25-0.45), discard <0.25
+        'gray_margin': 0.20,      # Triage zone (0.25-0.45), discard <0.25
+        'use_heuristics': True,   # Combine heuristics with LLM scoring
+        'heuristic_weight': 0.2   # Weight for heuristic score (0.2 = 20% heuristic, 80% LLM)
     },
         'priorities': ["pdf","text","image"],
         'summaries': {

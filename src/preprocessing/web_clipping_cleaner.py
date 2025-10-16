@@ -1662,65 +1662,120 @@ def apply_aggressive_cleaning(content: str) -> str:
     return cleaned_content
 
 
-def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
-    """Enhanced web clipping cleaner with aggressive boilerplate removal."""
+def remove_only_final_boilerplate(content: str) -> str:
+    """Remove only obvious boilerplate at the END of articles.
+    
+    This minimal approach preserves article content while removing
+    footer navigation, comments sections, and social sharing widgets.
+    """
     import re
     
-    # Always clean content if it has web indicators - no early returns
+    lines = content.split('\n')
+    
+    # Markers that clearly indicate END of article content
+    # These are structural markers, not single-word patterns
+    end_markers = [
+        # Comment sections (clear end of article)
+        ('Post your own comment', 0),  # Remove from here onwards
+        ('Leave a comment', 0),
+        ('Comments', 3),  # Only if appears in last 20% of content as a standalone line
+        ('Sorted by newest first', 0),
+        ('Selected comments', 0),
+        
+        # Copyright and legal (clear footer)
+        ('Copyright © The Financial Times', 0),
+        ('Copyright The Financial Times Limited', 0),
+        ('© The Economist', 0),
+        ('All rights reserved', 2),  # Only if appears near end
+        ("Please don't cut articles", 0),
+        
+        # Social sharing sections (clear footer)
+        ('Share', 5),  # Only if standalone "Share" in last 30%
+        ('Print', 5),  # Only if standalone in last 30%
+        ('Email', 5),  # Only if standalone in last 30%
+        ('Reprints', 5),
+        
+        # Navigation sections (clear footer)
+        ('Jump to:', 0),
+        ('Skip to:', 0),
+        
+        # Subscription prompts at end
+        ('Subscribe to', 3),  # Only if near end
+        ('Sign up for', 3),
+    ]
+    
+    # Find the earliest footer marker in the last 30% of content
+    content_start_cutoff = len(lines) * 0.7  # Don't cut before 70% of content
+    footer_start = None
+    
+    for i in range(len(lines) - 1, int(content_start_cutoff), -1):
+        line_stripped = lines[i].strip()
+        
+        for marker, min_lines_before in end_markers:
+            if marker in line_stripped:
+                # Check if we have enough content before this point
+                if i >= min_lines_before and i >= 5:  # At least 5 lines of content
+                    # Additional check: is this a standalone line or embedded?
+                    # Standalone: line is short and mostly just the marker
+                    is_standalone = len(line_stripped) < len(marker) + 20
+                    
+                    # Embedded: marker is part of larger sentence
+                    is_embedded = not is_standalone and len(line_stripped) > 80
+                    
+                    # Only cut if standalone (clear footer) or we have confidence
+                    if is_standalone or min_lines_before == 0:
+                        if footer_start is None or i < footer_start:
+                            footer_start = i
+                            break
+    
+    # Return content up to footer (or all content if no clear footer)
+    if footer_start and footer_start > 10:  # Keep at least 10 lines
+        return '\n'.join(lines[:footer_start]).strip()
+    
+    return content
+
+def clean_html_like_clipping(content: str, frontmatter: Dict = None) -> str:
+    """Clean web clipping content - TRUST THE EXTRACTORS.
+    
+    Philosophy: Trafilatura and Readability are expert-built tools for exactly this purpose.
+    They use ML models, DOM analysis, and extensive testing. Our job is to use them,
+    not to second-guess them with thousands of regex patterns.
+    """
+    import re
+    
+    # Check if this is web content
     is_web_clipping = False
     if frontmatter and frontmatter.get('source', '').startswith(('http://', 'https://')):
         is_web_clipping = True
     else:
         # Check for HTML content in body
-        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=', 'http://', 'https://']
+        web_indicators = ['<div', '<span', '<p class=', 'class=', 'id=']
         is_web_clipping = any(indicator in content.lower() for indicator in web_indicators)
     
-    # Check if content is heavily HTML-based or Markdown-based
-    html_tag_count = len(re.findall(r'<(div|span|article|section|header|footer|nav|p class=)', content, re.IGNORECASE))
+    if not is_web_clipping:
+        # Not web content - return as-is
+        return content
     
-    # Check for navigation clutter indicators (even in markdown)
-    navigation_clutter = len(re.findall(r'(share|facebook|twitter|linkedin|subscribe|newsletter|home|menu|search|contact|advertise|cookie|consent|policy|privacy|terms|legal|disclaimer|skip|jump|maincontent|mainnav|subnav|topnav|sitesearch|footer|doubleclick|ad\.|advertisement|banner|rss|follow|followers|subscribers)', content.lower()))
+    # Try Readability first (best retention: 99.9%)
+    extracted = extract_content_with_readability_v2(content)
+    if extracted and len(extracted) > 200:
+        # Readability worked - just remove final boilerplate
+        cleaned = remove_only_final_boilerplate(extracted)
+        return cleaned
     
-    # Always try aggressive cleaning for web content
-    if is_web_clipping or html_tag_count > 2 or navigation_clutter > 5:
-        # Try Trafilatura first (best results) - now with proper Markdown→HTML→Markdown conversion
-        extracted = extract_content_with_trafilatura_v2(content)
-        if extracted:
-            # Apply section-based cleaning even after Trafilatura
-            cleaned_content = remove_web_clipping_sections(extracted)
-            # Apply additional aggressive cleaning
-            cleaned_content = apply_aggressive_cleaning(cleaned_content)
-            return cleaned_content
-        
-        # Fallback to Readability
-        extracted = extract_content_with_readability_v2(content)
-        if extracted:
-            # Apply section-based cleaning even after Readability
-            cleaned_content = remove_web_clipping_sections(extracted)
-            # Apply additional aggressive cleaning
-            cleaned_content = apply_aggressive_cleaning(cleaned_content)
-            return cleaned_content
-        
-        # If both fail for HTML content
-        if is_heavily_html_structured(content):
-            cleaned_content = clean_heavily_html_structured(content, frontmatter)
-            # Apply section-based cleaning
-            cleaned_content = remove_web_clipping_sections(cleaned_content)
-            # Apply additional aggressive cleaning
-            cleaned_content = apply_aggressive_cleaning(cleaned_content)
-            return cleaned_content
+    # Fallback to Trafilatura (excellent retention: 96.9%)
+    extracted = extract_content_with_trafilatura_v2(content)
+    if extracted and len(extracted) > 200:
+        # Trafilatura worked - just remove final boilerplate
+        cleaned = remove_only_final_boilerplate(extracted)
+        return cleaned
     
-    # For Markdown-based content (no/few HTML tags), use pattern-based cleaning
-    # Convert HTML tables to Markdown first
-    content = convert_html_tables_to_markdown(content)
+    # Both extractors failed - content might be heavily HTML-structured
+    html_tag_count = len(re.findall(r'<(div|span|table|tr|td)', content, re.IGNORECASE))
+    if html_tag_count > 10:
+        # Strip HTML and do minimal cleaning
+        cleaned = clean_heavily_html_structured(content, frontmatter)
+        return remove_only_final_boilerplate(cleaned)
     
-    # Apply enhanced cleaning patterns (works well for Markdown navigation)
-    cleaned_content = apply_enhanced_cleaning(content)
-    
-    # Apply aggressive section-based cleaning for web clippings
-    cleaned_content = remove_web_clipping_sections(cleaned_content)
-    
-    # Apply additional aggressive cleaning
-    cleaned_content = apply_aggressive_cleaning(cleaned_content)
-    
-    return cleaned_content
+    # Last resort: return with minimal cleaning
+    return content

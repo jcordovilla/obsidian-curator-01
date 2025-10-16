@@ -147,10 +147,12 @@ output/
 processed/
 results/
 
-# Test outputs (but keep tests/test_data/)
+# Test outputs (but keep test scripts)
 test_output/
 performance_test_results_*.json
-tests/
+tests/test_data/
+tests/archive/
+tests/evaluation_results_*.json
 
 # Python cache
 **/__pycache__/

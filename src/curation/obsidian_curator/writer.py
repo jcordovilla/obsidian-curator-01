@@ -105,3 +105,69 @@ def copy_attachments_to_curated(note_path, cfg, preprocessed_attachments):
     
     except Exception as e:
         print(f"Warning: Failed to copy attachments for {note_filename}: {e}")
+
+def write_triage_note(note_path, meta, cats, tags, ents, content, score, cfg, preprocessed_attachments=None):
+    """Write triage note with rich metadata for manual review."""
+    triage_dir = cfg['paths']['out_notes'].replace('/notes', '/triage')
+    os.makedirs(triage_dir, exist_ok=True)
+    
+    # Use the passed preprocessed_attachments or fall back to cfg
+    if preprocessed_attachments is None:
+        preprocessed_attachments = cfg['paths']['attachments']
+    
+    rel = pathlib.Path(note_path).name
+    out = os.path.join(triage_dir, rel)
+    
+    fm = []
+    fm.append("---")
+    fm.append(f'title: {meta.get("title","")}')
+    fm.append(f'triaged: true')
+    fm.append(f'triaged_at: {datetime.date.today().isoformat()}')
+    fm.append(f'content_type: {content.get("kind")}')
+    fm.append(f'categories: {cats}')
+    fm.append(f'tags: {tags}')
+    fm.append(f'usefulness: {score:.3f}')
+    
+    # Add extracted entities
+    if ents:
+        if ents.get('organizations'):
+            fm.append(f'organizations: {ents["organizations"]}')
+        if ents.get('projects'):
+            fm.append(f'projects: {ents["projects"]}')
+        if ents.get('technologies'):
+            fm.append(f'technologies: {ents["technologies"]}')
+        if ents.get('locations'):
+            fm.append(f'locations: {ents["locations"]}')
+    
+    # Add original metadata
+    if meta.get('source'):
+        fm.append(f'source: {meta["source"]}')
+    if meta.get('date created'):
+        fm.append(f'date created: {meta["date created"]}')
+    if meta.get('date modified'):
+        fm.append(f'date modified: {meta["date modified"]}')
+    if meta.get('language'):
+        fm.append(f'language: {meta["language"]}')
+    
+    fm.append("---")
+    fm.append("## Triage Note")
+    fm.append("")
+    fm.append(f"**Score**: {score:.3f} (below curation threshold)")
+    fm.append("")
+    fm.append("**Reason for Triage**: This note was automatically triaged for manual review.")
+    fm.append("")
+    fm.append("**Content**:")
+    fm.append("")
+    
+    # Add the original content
+    body = content.get('text', '').strip()
+    if body:
+        fm.append(body)
+    else:
+        fm.append("*No content extracted*")
+    
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(fm))
+    
+    # Copy attachments if they exist
+    copy_attachments_for_note(note_path, out, preprocessed_attachments, cfg)
