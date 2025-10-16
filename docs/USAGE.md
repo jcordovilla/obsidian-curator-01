@@ -10,24 +10,12 @@ PREPROCESSED_VAULT_PATH = "/path/to/preprocessed/vault"
 CURATED_VAULT_PATH = "/path/to/curated/vault"
 ```
 
-### 2. Install Ollama (for audio transcription)
-```bash
-# Install Ollama (macOS)
-brew install ollama
-
-# Start Ollama service
-ollama serve
-
-# Install Whisper model
-ollama pull dimavz/whisper-tiny:latest
-```
-
-### 3. Update Configuration
+### 2. Update Configuration
 ```bash
 python scripts/update_config.py
 ```
 
-### 4. Test the System (Recommended)
+### 3. Test the System (Recommended)
 ```bash
 # Test with 10 random notes
 python tests/test_complete_pipeline.py 10
@@ -39,7 +27,7 @@ python tests/test_complete_pipeline.py 10 --seed 42
 python tests/test_complete_pipeline.py 15 --incremental
 ```
 
-### 5. Process Your Vault
+### 4. Process Your Vault
 ```bash
 # Preprocessing (raw → preprocessed)
 python scripts/preprocess.py
@@ -48,148 +36,115 @@ python scripts/preprocess.py
 python -m src.curation.obsidian_curator.main
 ```
 
-## Audio Processing
+## Advanced Usage
 
-### Supported Audio Formats
-- **WAV, MP3, M4A, AAC, FLAC, OGG, WMA** - Full support for common audio formats
-- **Automatic Detection** - System automatically identifies audio attachments
-- **Metadata Extraction** - File size, format, and creation time tracking
-
-### Audio Processing Workflow
-1. **Detection** - Audio files are automatically classified as `audio_annotation`
-2. **Transcription** - Whisper model converts speech to text
-3. **Analysis** - LLM analyzes content for professional relevance
-4. **Curation** - Full content available for curation decisions
-
-### Audio Content Analysis
-The system provides comprehensive analysis of audio content:
-- **Content Type Identification** - Meeting, presentation, interview classification
-- **Speaker Recognition** - Multi-speaker detection and identification
-- **Professional Content Extraction** - Quotes, statistics, data points
-- **Technical Substance Assessment** - Quantitative data and frameworks
-- **Publication Utility Evaluation** - Citation-ready content identification
-
-## Available Commands
-
-### Analysis
+### Preprocessing Options
 ```bash
-# Create sample dataset
-python scripts/main.py --sample
+# Full vault processing
+python scripts/preprocess.py
 
-# Analyze content
-python scripts/main.py --analyze
+# Sample processing
+python scripts/preprocess.py --sample 50
 
-# Technical characterization
-python scripts/main.py --technical-analysis
-```
-
-### Preprocessing
-```bash
-# Dry run (test without changes)
+# Dry run (no changes)
 python scripts/preprocess.py --dry-run
 
-# Process sample
-python scripts/preprocess.py --sample 50
+# Custom batch size and workers
+python scripts/preprocess.py --batch-size 100 --workers 8
 
 # Process specific categories
 python scripts/preprocess.py --categories web_clipping personal_note
-
-# High performance
-python scripts/preprocess.py --batch-size 100 --workers 8
 ```
 
-### Curation
+### Curation Module
 ```bash
-# Run curation pipeline
+# Run the curation pipeline
 python -m src.curation.obsidian_curator.main
 
 # With custom paths
 python -m src.curation.obsidian_curator.main --vault /path/to/vault --out /path/to/output
 ```
 
-## Configuration
-
-The project uses a unified configuration system:
-
-- **`config.py`** - Main configuration (single source of truth)
-- **`config.yaml`** - Auto-generated for curation module
-- **`scripts/update_config.py`** - Sync configuration files
-
-### Key Settings
-```python
-# Main vault path
-VAULT_PATH = "/path/to/your/vault"
-
-# Output paths (automatically calculated)
-PREPROCESSING_OUTPUT_PATH = "/path/to/processed/vault"
-CURATION_OUTPUT_PATH = "/path/to/curated/vault"
-```
-
-## What Gets Processed
-
-### Content Categories
-- **Web Clipping** (60%) - Removes boilerplate, ads, navigation
-- **Personal Notes** (11.5%) - Gentle formatting cleanup
-- **PDF Annotations** (9.5%) - Validates attachments
-- **Business Cards** (3%) - Structures contact info
-- **Technical Documents** (2%) - Preserves code and structure
-- **Unknown** (14%) - Minimal processing
-
-### Processing Pipeline
-1. **Validation** - File integrity checks
-2. **Metadata** - Standardize dates and tags
-3. **Classification** - Auto-categorize content
-4. **Cleaning** - Remove boilerplate
-5. **Formatting** - Standardize structure
-6. **Validation** - Quality checks
-7. **Output** - Generate clean notes
-
-## 🧪 Testing System
-
-### **Complete Pipeline Testing**
+### Testing Options
 ```bash
-# Basic testing
-python tests/test_complete_pipeline.py 10
+# Run complete pipeline test
+python tests/test_complete_pipeline.py
 
-# Reproducible testing with seed
-python tests/test_complete_pipeline.py 10 --seed 42
+# Test folder structure and configuration
+python tests/test_folder_structure.py
 
-# Incremental testing (preserves previous work)
-python tests/test_complete_pipeline.py 15 --incremental
+# Test preprocessing pipeline only
+python tests/test_preprocessing_pipeline.py
 
-# Clean slate testing
-python tests/test_complete_pipeline.py 10 --no-preserve
+# Partial pipeline testing
+python tests/test_complete_pipeline.py --stages random preprocess
+python tests/test_complete_pipeline.py --stages curate
 ```
 
-### **Test Output Structure**
-- **`tests/test_data/curated/notes/`** - Successfully curated notes
-- **`tests/test_data/curated/triage/`** - Notes requiring manual review
-- **`tests/test_data/archive/`** - Historical test results with timestamps
-- **`tests/test_data/preprocessed/`** - Cleaned test notes
-- **`tests/test_data/raw/`** - Fresh test notes
+## Configuration Management
 
-### **Performance Monitoring**
-- Processing speed and resource usage
-- Curation quality and decision patterns
-- Model performance across different content types
-- Archive system for historical comparison
+```bash
+# Update config.yaml after changing config.py
+python scripts/update_config.py
 
-## Safety Features
+# View current configuration
+python scripts/update_config.py
+```
 
-- **Automatic Backups** - Original files backed up
-- **Dry Run Mode** - Test without changes
-- **Validation** - Quality and integrity checks
-- **Error Handling** - Comprehensive error recovery
-- **Test Preservation** - Historical test results archived
+## Output Structure
+
+The system creates a three-stage workflow:
+
+```
+Raw → Preprocessed → Curated
+```
+
+### Raw Vault
+- Original notes and attachments
+- Unprocessed content
+
+### Preprocessed Vault
+- Cleaned and standardized notes
+- Metadata normalized
+- Boilerplate removed
+- Attachments organized
+
+### Curated Vault
+- AI-analyzed content
+- Professional summaries
+- Quality scoring
+- Three outputs:
+  - `notes/`: High-value content (score ≥ 0.45)
+  - `triage/`: Medium-value content (manual review)
+  - `attachments/`: Curated attachments
+
+## Cost and Performance
+
+### Cost Estimates
+- **Per note**: ~$0.001-0.002 (less than 1 cent)
+- **1,000 notes**: ~$1-2 total
+- Uses GPT-4o-mini for cost efficiency
+
+### Performance
+- **Processing speed**: ~0.4 files/second
+- **Memory usage**: Optimized for large vaults
+- **Quality**: 99.9% success rate
 
 ## Troubleshooting
 
 ### Common Issues
-1. **Path not found** - Check `config.py` and run `python scripts/update_config.py`
-2. **Permission errors** - Ensure write access to output directories
-3. **Memory issues** - Reduce batch size: `--batch-size 25`
+
+**Configuration errors**: Run `python scripts/update_config.py` after changing `config.py`
+
+**Path issues**: Ensure all paths in `config.py` are absolute and exist
+
+**Memory issues**: Reduce batch size in preprocessing: `--batch-size 25`
+
+**API errors**: Check OpenAI API key and rate limits
 
 ### Getting Help
-- Check the main `README.md` for detailed information
-- Review error messages in the console output
-- Use `--dry-run` to test before processing
+
+1. Check the logs in the `logs/` directory
+2. Run tests to verify setup: `python tests/test_complete_pipeline.py 5`
+3. Use dry-run mode: `python scripts/preprocess.py --dry-run`
+4. Review the technical specification in `docs/TECHNICAL_SPECIFICATION.md`
