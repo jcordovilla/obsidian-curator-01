@@ -179,8 +179,8 @@ def calculate_content_richness(text, title, meta):
 def get_llm_usefulness_score(text, title, meta, cfg):
     """Single-pass LLM assessment of content usefulness for knowledge base."""
     
-    # Truncate text for LLM processing (OpenAI handles longer contexts better)
-    text_sample = text[:8000] if len(text) > 8000 else text
+    # Truncate text for LLM processing (optimized for cost - ~1000 tokens)
+    text_sample = text[:4000] if len(text) > 4000 else text
     
     # Extract metadata
     source = meta.get('source', 'Not specified')

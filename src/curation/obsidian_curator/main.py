@@ -14,6 +14,7 @@ from .summarize import summarize_content
 from .writer import write_curated_note, write_triage_note
 from .store import EmbeddingIndex, Manifest
 from .utils import iter_markdown_notes, parse_front_matter
+from .llm import get_token_usage, reset_token_usage
 
 def load_cfg(path='config.yaml'):
     """Load configuration, preferring config.py over YAML file."""
@@ -104,6 +105,31 @@ def run(cfg, vault=None, attachments=None, out_notes=None, dry_run=False):
             logger.success(f'KEPT{ " (dry-run)" if dry_run else "" }: {note_path} (score={score:.3f})')
         except Exception as e:
             logger.exception(f'Error processing {note_path}: {e}')
+    
+    # Report token usage at the end
+    usage = get_token_usage()
+    if usage['total_tokens'] > 0:
+        logger.info(f"📊 TOKEN USAGE SUMMARY:")
+        logger.info(f"  Total tokens: {usage['total_tokens']:,}")
+        logger.info(f"  Prompt tokens: {usage['total_prompt_tokens']:,}")
+        logger.info(f"  Completion tokens: {usage['total_completion_tokens']:,}")
+        
+        # Cost estimation (approximate OpenAI pricing)
+        # gpt-4o-mini: $0.150/1M input, $0.600/1M output
+        # gpt-5: $2.50/1M input, $10.00/1M output
+        for model, stats in usage['calls_by_model'].items():
+            if 'gpt-5' in model or 'o3' in model or 'o4' in model:
+                input_cost = stats['prompt_tokens'] * 2.50 / 1_000_000
+                output_cost = stats['completion_tokens'] * 10.00 / 1_000_000
+            elif 'gpt-4o-mini' in model:
+                input_cost = stats['prompt_tokens'] * 0.150 / 1_000_000
+                output_cost = stats['completion_tokens'] * 0.600 / 1_000_000
+            else:
+                input_cost = stats['prompt_tokens'] * 0.30 / 1_000_000  # Generic estimate
+                output_cost = stats['completion_tokens'] * 1.20 / 1_000_000
+            
+            total_cost = input_cost + output_cost
+            logger.info(f"  {model}: {stats['calls']} calls, {stats['total_tokens']:,} tokens, ~${total_cost:.3f}")
 
 def cli():
     p = argparse.ArgumentParser()

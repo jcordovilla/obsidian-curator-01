@@ -170,4 +170,4 @@ def write_triage_note(note_path, meta, cats, tags, ents, content, score, cfg, pr
         f.write('\n'.join(fm))
     
     # Copy attachments if they exist
-    copy_attachments_for_note(note_path, out, preprocessed_attachments, cfg)
+    copy_attachments_to_curated(note_path, cfg, preprocessed_attachments)

@@ -60,7 +60,7 @@ Publication_readiness: Score 0-1 for citation quality.
 Return JSON with: categories (array), tags (array), entities (object), publication_readiness (number)."""
 
 def classify_json(content, meta, cfg):
-    text = content.get('text','')[:4000]
+    text = content.get('text','')[:2000]  # Reduced for cost optimization (~500 tokens)
     title = meta.get("title","")
     
     # Extract metadata for better classification context

@@ -190,8 +190,8 @@ def get_curation_config():
         },
         'models': {
             'provider': 'openai',  # Use OpenAI instead of Ollama
-            'fast': 'gpt-5-mini-2025-08-07',  # Fast GPT-5 mini for classification/summarization
-            'main': 'gpt-5-2025-08-07',  # Main GPT-5 model for analysis (400K context)
+            'fast': 'gpt-4o-mini',  # Cost-effective model for classification/summarization (~100x cheaper than GPT-5)
+            'main': 'gpt-4o-mini',  # Use mini for analysis too (can upgrade to gpt-4o or gpt-5 if needed)
             'embed': 'text-embedding-3-small',  # OpenAI embeddings (1536 dims)
             'embed_dims': 1536  # Dimension count for embeddings
         },

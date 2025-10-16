@@ -11,6 +11,14 @@ from pathlib import Path
 # Initialize OpenAI client (reads from .env file or environment)
 _openai_client = None
 
+# Token usage tracking
+_token_usage = {
+    'total_prompt_tokens': 0,
+    'total_completion_tokens': 0,
+    'total_tokens': 0,
+    'calls_by_model': {}
+}
+
 def _load_env():
     """Load environment variables from .env file if it exists."""
     env_path = Path('.env')
@@ -39,6 +47,42 @@ def _get_openai_client():
             )
         _openai_client = OpenAI(api_key=api_key)
     return _openai_client
+
+def _track_token_usage(model: str, usage):
+    """Track token usage for cost estimation."""
+    global _token_usage
+    
+    if usage:
+        _token_usage['total_prompt_tokens'] += usage.prompt_tokens
+        _token_usage['total_completion_tokens'] += usage.completion_tokens
+        _token_usage['total_tokens'] += usage.total_tokens
+        
+        if model not in _token_usage['calls_by_model']:
+            _token_usage['calls_by_model'][model] = {
+                'prompt_tokens': 0,
+                'completion_tokens': 0,
+                'total_tokens': 0,
+                'calls': 0
+            }
+        
+        _token_usage['calls_by_model'][model]['prompt_tokens'] += usage.prompt_tokens
+        _token_usage['calls_by_model'][model]['completion_tokens'] += usage.completion_tokens
+        _token_usage['calls_by_model'][model]['total_tokens'] += usage.total_tokens
+        _token_usage['calls_by_model'][model]['calls'] += 1
+
+def get_token_usage():
+    """Get current token usage statistics."""
+    return _token_usage.copy()
+
+def reset_token_usage():
+    """Reset token usage statistics."""
+    global _token_usage
+    _token_usage = {
+        'total_prompt_tokens': 0,
+        'total_completion_tokens': 0,
+        'total_tokens': 0,
+        'calls_by_model': {}
+    }
 
 def chat_text(model: str, system: str, user: str, tokens: int = 512, temp: float = 0.2, provider: str = "openai", max_retries: int = 2) -> str:
     """
@@ -79,6 +123,10 @@ def chat_text(model: str, system: str, user: str, tokens: int = 512, temp: float
             try:
                 response = client.chat.completions.create(**kwargs)
                 content = response.choices[0].message.content
+                
+                # Track token usage
+                if hasattr(response, 'usage') and response.usage:
+                    _track_token_usage(model, response.usage)
                 
                 # Check for empty response
                 if not content or not content.strip():
@@ -186,6 +234,10 @@ def chat_json(
                 response = client.chat.completions.create(**kwargs)
                 text = response.choices[0].message.content
                 
+                # Track token usage
+                if hasattr(response, 'usage') and response.usage:
+                    _track_token_usage(model, response.usage)
+                
                 # Validate response is not empty
                 if not text or not text.strip():
                     last_error = f"Empty response (attempt {attempt + 1}/{max_retries})"
@@ -288,10 +340,10 @@ def embed_text(text: str, model: str, provider: str = "openai") -> Optional[List
     
     if provider == "openai":
         client = _get_openai_client()
-        # Truncate text if too long (8191 token limit for embedding models)
-        # For GPT-5 context: 400K tokens, but embeddings use separate models
-        if len(text) > 8000:
-            text = text[:8000]
+        # Truncate text for cost optimization (~1K tokens)
+        # text-embedding-3-small supports 8K tokens
+        if len(text) > 4000:
+            text = text[:4000]
         
         response = client.embeddings.create(
             model=model,
