@@ -25,8 +25,8 @@ class EntityExtraction(BaseModel):
 
 class ClassificationResponse(BaseModel):
     """Schema for content classification."""
-    categories: List[str] = Field(..., min_length=1, max_length=3, description="1-3 infrastructure taxonomy categories")
-    tags: List[str] = Field(..., min_length=5, max_length=10, description="5-10 professional tags")
+    categories: List[str] = Field(default_factory=list, max_length=3, description="0-3 infrastructure taxonomy categories")
+    tags: List[str] = Field(default_factory=list, max_length=10, description="0-10 professional tags")
     entities: EntityExtraction = Field(default_factory=EntityExtraction)
     publication_readiness: float = Field(..., ge=0.0, le=1.0, description="Publication readiness score from 0 to 1")
     
