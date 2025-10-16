@@ -435,13 +435,17 @@ def extract_content(primary, assets, body, lang=None, attachments_root=None, not
                 pdf_content = pdf_result.get('text', '').strip()
                 break
     
-    # If we have PDF content, combine it with the original text
+    # If we have PDF content, store metadata but don't include full text in output
     if pdf_content:
-        combined_text = text_result.get('text', '') + "\n\n## PDF Content\n\n" + pdf_content
+        # For PDF notes, we don't include the full PDF content in the text field
+        # The writer will handle displaying just the attachment reference
         return {
-            'text': combined_text,
+            'text': text_result.get('text', ''),  # Only original note text, no PDF content
             'kind': 'pdf_note',
             'pdf_extracted': True,
+            'pdf_content': pdf_content,  # Store PDF content separately for summarization
+            'pages': pdf_result.get('pages', 0),
+            'pages_processed': pdf_result.get('pages_processed', 0),
             'original_text_length': len(text_result.get('text', '')),
             'pdf_text_length': len(pdf_content)
         }

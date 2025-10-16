@@ -45,7 +45,11 @@ def summarize_content(content, meta, cats, cfg):
     if len(text.strip()) < 50:
         return f"**INSUFFICIENT CONTENT FOR PROFESSIONAL SUMMARY**\n\nSource contains insufficient material for professional analysis.\n\n**Available content**: {text.strip()[:200] if text.strip() else 'No readable text found'}\n\n**Assessment**: This note lacks the substantive content required for professional publication use."
     
-    if kind=='pdf':
+    if kind in ['pdf', 'pdf_note']:
+        # For PDF notes, use the PDF content for summarization if available
+        pdf_text = content.get('pdf_content', '') if kind == 'pdf_note' else text
+        analysis_text = pdf_text if pdf_text else text
+        
         prompt = f"""CRITICAL ANTI-FABRICATION INSTRUCTIONS:
 - ONLY use information explicitly present in the provided text extract
 - DO NOT invent, elaborate, or create any content not directly stated in the source
@@ -61,7 +65,7 @@ Modified: {date_modified if date_modified else 'Not specified'}
 Language: {language}
 Categories: {categories}
 Pages: {pages}
-TEXT EXTRACT TO ANALYZE: {text}
+TEXT EXTRACT TO ANALYZE: {analysis_text}
 
 CREATE SUMMARY ONLY FROM THE ABOVE TEXT EXTRACT:
 

@@ -42,7 +42,7 @@ def write_curated_note(note_path, meta, cats, tags, ents, summary, content, scor
     body = f"## Curator Summary\n\n{summary}\n\n---\n\n"
     
     # For PDFs, add attachment reference instead of full text
-    if content.get('kind') == 'pdf':
+    if content.get('kind') in ['pdf', 'pdf_note']:
         # Add reference to original PDF attachment
         note_stem = pathlib.Path(note_path).stem
         body += f"**Source Document**: See attached PDF: `{note_stem}.pdf`\n\n"
