@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 from ..utils.file_handler import FileHandler
 from .metadata_standardizer import MetadataStandardizer
@@ -113,23 +114,35 @@ class BatchProcessor:
         if not files_to_process:
             return self._finalize_results(start_time)
         
-        # Process files in batches
+        # Process files in batches with progress bar
         batch_results = []
-        for i in range(0, len(files_to_process), self.batch_size):
-            batch = files_to_process[i:i + self.batch_size]
-            batch_num = i // self.batch_size + 1
-            total_batches = (len(files_to_process) + self.batch_size - 1) // self.batch_size
-            
-            print(f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} files)")
-            
-            batch_result = self._process_batch(batch, dry_run, categories_to_process)
-            batch_results.append(batch_result)
-            
-            # Update statistics
-            self._update_stats(batch_result)
-            
-            # Progress report
-            self._print_progress_report()
+        total_batches = (len(files_to_process) + self.batch_size - 1) // self.batch_size
+        
+        with tqdm(total=len(files_to_process), desc="Processing files", unit="file") as pbar:
+            for i in range(0, len(files_to_process), self.batch_size):
+                batch = files_to_process[i:i + self.batch_size]
+                batch_num = i // self.batch_size + 1
+                
+                # Update progress bar description with batch info
+                pbar.set_description(f"Batch {batch_num}/{total_batches}")
+                
+                batch_result = self._process_batch(batch, dry_run, categories_to_process, pbar)
+                batch_results.append(batch_result)
+                
+                # Update statistics
+                self._update_stats(batch_result)
+                
+                # Update progress bar with batch results
+                processed_in_batch = len(batch_result['processed'])
+                failed_in_batch = len(batch_result['failed'])
+                skipped_in_batch = len(batch_result['skipped'])
+                
+                pbar.set_postfix({
+                    'Success': f"{self.stats['processed_files']}/{len(files_to_process)}",
+                    'Failed': failed_in_batch,
+                    'Skipped': skipped_in_batch,
+                    'Rate': f"{(self.stats['processed_files']/len(files_to_process)*100):.1f}%"
+                })
         
         # Finalize results
         results = self._finalize_results(start_time)
@@ -142,7 +155,8 @@ class BatchProcessor:
     def _process_batch(self, 
                       files: List[Path], 
                       dry_run: bool,
-                      categories_to_process: Optional[List[str]]) -> Dict:
+                      categories_to_process: Optional[List[str]],
+                      pbar: tqdm = None) -> Dict:
         """Process a batch of files."""
         batch_results = {
             'processed': [],
@@ -177,6 +191,10 @@ class BatchProcessor:
                         batch_results['classifications'].append(result['classification'])
                     if 'validation' in result:
                         batch_results['validations'].append(result['validation'])
+                    
+                    # Update progress bar
+                    if pbar:
+                        pbar.update(1)
                         
                 except Exception as e:
                     batch_results['failed'].append({
@@ -185,6 +203,9 @@ class BatchProcessor:
                         'error': str(e),
                         'stage': 'batch_processing'
                     })
+                    # Update progress bar even for failed files
+                    if pbar:
+                        pbar.update(1)
         
         return batch_results
     
@@ -561,20 +582,6 @@ class BatchProcessor:
                 'stage': failed.get('stage', 'unknown')
             })
     
-    def _print_progress_report(self):
-        """Print progress report."""
-        total = self.stats['total_files']
-        processed = self.stats['processed_files']
-        failed = self.stats['failed_files']
-        skipped = self.stats['skipped_files']
-        completed = processed + failed + skipped
-        
-        progress_pct = (completed / total * 100) if total > 0 else 0
-        success_pct = (processed / completed * 100) if completed > 0 else 0
-        
-        print(f"  Progress: {completed}/{total} files ({progress_pct:.1f}%)")
-        print(f"  Success rate: {processed}/{completed} ({success_pct:.1f}%)")
-        print(f"  Failed: {failed}, Skipped: {skipped}")
     
     def _finalize_results(self, start_time: float) -> Dict:
         """Finalize processing results."""
