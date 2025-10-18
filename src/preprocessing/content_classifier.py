@@ -146,15 +146,7 @@ class ContentClassifier:
         indicators['has_image_attachment'] = any(ext in content.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'])
         indicators['no_attachments'] = not indicators['has_attachment_reference']
         
-        # Audio-specific indicators
-        indicators['audio_only_content'] = (
-            indicators['has_audio_attachment'] and 
-            word_count < 100 and 
-            not indicators['has_headers'] and
-            not indicators['structured_content']
-        )
-        
-        # Structure analysis
+        # Structure analysis (define these first)
         indicators['has_headers'] = bool(re.search(r'^#+\s', content, re.MULTILINE))
         indicators['has_code_blocks'] = '```' in content or content.count('`') > 4
         indicators['structured_content'] = (
@@ -162,6 +154,14 @@ class ContentClassifier:
             (content.count('\n\n') > content.count('\n') * 0.2)
         )
         indicators['simple_structure'] = not indicators['structured_content']
+        
+        # Audio-specific indicators (after structure analysis is defined)
+        indicators['audio_only_content'] = (
+            indicators['has_audio_attachment'] and 
+            word_count < 100 and 
+            not indicators['has_headers'] and
+            not indicators['structured_content']
+        )
         
         # Contact information analysis
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'

@@ -24,8 +24,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  python preprocess.py                                    # Process only new/changed notes (default)
   python preprocess.py --dry-run                          # Test run without changes
   python preprocess.py --sample 20                        # Process 20 sample files
+  python preprocess.py --full                             # Process all notes (override incremental)
   python preprocess.py --categories web_clipping          # Process only web clippings
   python preprocess.py --output processed_vault           # Specify output directory
   python preprocess.py --batch-size 100 --workers 8      # High performance settings
@@ -84,6 +86,18 @@ Examples:
         help='Disable backup creation'
     )
     
+    parser.add_argument(
+        '--full',
+        action='store_true',
+        help='Process all notes (full mode) - normally only new/changed notes are processed'
+    )
+    
+    parser.add_argument(
+        '--register-path',
+        default='.metadata/note_register.db',
+        help='Path to note register database (default: .metadata/note_register.db)'
+    )
+    
     args = parser.parse_args()
     
     # Validate vault path
@@ -109,7 +123,8 @@ Examples:
         output_path=output_path,
         backup=not args.no_backup,
         batch_size=args.batch_size,
-        max_workers=args.workers
+        max_workers=args.workers,
+        register_path=args.register_path
     )
     
     try:
@@ -123,8 +138,9 @@ Examples:
             print(f"  Successful: {results['success_count']}")
             print(f"  Failed: {results['failure_count']}")
             
-        else:
-            # Process entire vault
+        elif args.full:
+            # Process entire vault (full mode)
+            print("Running in full mode (processing all notes)...")
             results = processor.process_vault(
                 dry_run=args.dry_run,
                 categories_to_process=args.categories
@@ -154,6 +170,17 @@ Examples:
                 print(f"\nErrors (showing first 5):")
                 for error in results['errors'][:5]:
                     print(f"  {Path(error['file']).name}: {error['error']}")
+        
+        else:
+            # Default: Incremental processing - only process notes that need preprocessing
+            print("Running in incremental mode (default) - processing only new/changed notes...")
+            results = processor.process_incremental(dry_run=args.dry_run)
+            
+            print(f"\nIncremental processing complete:")
+            print(f"  Total notes needing processing: {results['total_files']}")
+            print(f"  Successfully processed: {results['processed_files']}")
+            print(f"  Failed: {results['failed_files']}")
+            print(f"  Processing time: {results['processing_time']:.1f}s")
     
     except KeyboardInterrupt:
         print("\nProcessing interrupted by user")

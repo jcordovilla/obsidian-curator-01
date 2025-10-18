@@ -11,9 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
 
 from ..utils.file_handler import FileHandler
+from ..utils.note_register import get_register, record_preprocessing
 from .metadata_standardizer import MetadataStandardizer
 from .web_clipping_cleaner import WebClippingCleaner
 from .web_content_processor import WebContentProcessor
@@ -29,13 +29,18 @@ class BatchProcessor:
                  output_path: str = None,
                  backup: bool = True,
                  batch_size: int = 50,
-                 max_workers: int = 4):
+                 max_workers: int = 4,
+                 register_path: str = ".metadata/note_register.db"):
         
         self.vault_path = Path(vault_path)
         self.output_path = Path(output_path) if output_path else self.vault_path / "processed"
         self.backup = backup
         self.batch_size = batch_size
         self.max_workers = max_workers
+        self.register_path = register_path
+        
+        # Initialize note register
+        self.register = get_register(register_path)
         
         # Initialize components
         self.file_handler = FileHandler(backup_dir=self.output_path / "backup")
@@ -114,35 +119,30 @@ class BatchProcessor:
         if not files_to_process:
             return self._finalize_results(start_time)
         
-        # Process files in batches with progress bar
+        # Process files in batches with simple progress tracking
         batch_results = []
         total_batches = (len(files_to_process) + self.batch_size - 1) // self.batch_size
         
-        with tqdm(total=len(files_to_process), desc="Processing files", unit="file") as pbar:
-            for i in range(0, len(files_to_process), self.batch_size):
-                batch = files_to_process[i:i + self.batch_size]
-                batch_num = i // self.batch_size + 1
-                
-                # Update progress bar description with batch info
-                pbar.set_description(f"Batch {batch_num}/{total_batches}")
-                
-                batch_result = self._process_batch(batch, dry_run, categories_to_process, pbar)
-                batch_results.append(batch_result)
-                
-                # Update statistics
-                self._update_stats(batch_result)
-                
-                # Update progress bar with batch results
-                processed_in_batch = len(batch_result['processed'])
-                failed_in_batch = len(batch_result['failed'])
-                skipped_in_batch = len(batch_result['skipped'])
-                
-                pbar.set_postfix({
-                    'Success': f"{self.stats['processed_files']}/{len(files_to_process)}",
-                    'Failed': failed_in_batch,
-                    'Skipped': skipped_in_batch,
-                    'Rate': f"{(self.stats['processed_files']/len(files_to_process)*100):.1f}%"
-                })
+        for i in range(0, len(files_to_process), self.batch_size):
+            batch = files_to_process[i:i + self.batch_size]
+            batch_num = i // self.batch_size + 1
+            
+            print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
+            
+            batch_result = self._process_batch(batch, dry_run, categories_to_process)
+            batch_results.append(batch_result)
+            
+            # Update statistics
+            self._update_stats(batch_result)
+            
+            # Simple progress report
+            processed = self.stats['processed_files']
+            failed = self.stats['failed_files']
+            skipped = self.stats['skipped_files']
+            completed = processed + failed + skipped
+            progress_pct = (completed / len(files_to_process) * 100) if len(files_to_process) > 0 else 0
+            
+            print(f"Progress: {completed}/{len(files_to_process)} files ({progress_pct:.1f}%) | Success: {processed}, Failed: {failed}, Skipped: {skipped}")
         
         # Finalize results
         results = self._finalize_results(start_time)
@@ -155,8 +155,7 @@ class BatchProcessor:
     def _process_batch(self, 
                       files: List[Path], 
                       dry_run: bool,
-                      categories_to_process: Optional[List[str]],
-                      pbar: tqdm = None) -> Dict:
+                      categories_to_process: Optional[List[str]]) -> Dict:
         """Process a batch of files."""
         batch_results = {
             'processed': [],
@@ -191,10 +190,6 @@ class BatchProcessor:
                         batch_results['classifications'].append(result['classification'])
                     if 'validation' in result:
                         batch_results['validations'].append(result['validation'])
-                    
-                    # Update progress bar
-                    if pbar:
-                        pbar.update(1)
                         
                 except Exception as e:
                     batch_results['failed'].append({
@@ -203,9 +198,6 @@ class BatchProcessor:
                         'error': str(e),
                         'stage': 'batch_processing'
                     })
-                    # Update progress bar even for failed files
-                    if pbar:
-                        pbar.update(1)
         
         return batch_results
     
@@ -240,12 +232,27 @@ class BatchProcessor:
             # Stage 2: Read and parse file
             result['stages_completed'].append('reading')
             frontmatter, content = self.file_handler.read_note(file_path)
+            
+            # Safety checks for read_note result
+            if frontmatter is None:
+                frontmatter = {}
+            if content is None:
+                result['status'] = 'failed'
+                result['error'] = 'File content is None'
+                return result
+            
             result['original_size'] = len(content)
             
             # Stage 3: Content Classification
             result['stages_completed'].append('classification')
             classification = self.classifier.classify_note(content, frontmatter)
             result['classification'] = classification
+            
+            # Safety check for classification result
+            if not classification or 'category' not in classification:
+                result['status'] = 'failed'
+                result['error'] = 'Classification failed to return valid category'
+                return result
             
             category = classification['category']
             
@@ -261,6 +268,12 @@ class BatchProcessor:
             standardized_metadata = self.metadata_standardizer.standardize_metadata(
                 frontmatter, file_path.name, str(file_path)
             )
+            
+            # Safety check for metadata standardization result
+            if standardized_metadata is None:
+                result['status'] = 'failed'
+                result['error'] = 'Metadata standardization returned None'
+                return result
             
             if standardized_metadata != original_frontmatter:
                 result['changes_made'].append('metadata_standardized')
@@ -392,7 +405,16 @@ class BatchProcessor:
         except Exception as e:
             result['status'] = 'failed'
             result['error'] = str(e)
+            result['error_type'] = type(e).__name__
+            result['stage'] = result['stages_completed'][-1] if result['stages_completed'] else 'unknown'
             result['processing_time'] = time.time() - start_time
+            # Log detailed error for debugging
+            import traceback
+            print(f"\nERROR processing {file_path}:")
+            print(f"  Stage: {result.get('stage', 'unknown')}")
+            print(f"  Error: {str(e)}")
+            print(f"  Type: {type(e).__name__}")
+            print(f"  Traceback:\n{traceback.format_exc()}")
             return result
     
     def _process_pdf_note(self, content: str, file_path: str, result: dict) -> str:
@@ -402,7 +424,7 @@ class BatchProcessor:
         sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'curation', 'obsidian_curator'))
         
         try:
-            from extractors import extract_pdf
+            from ..curation.obsidian_curator.extractors import extract_pdf
             
             # Find PDF attachment in the note
             pdf_match = re.search(r'!\[\[attachments/([^]]+\.pdf)\]\]', content)
@@ -421,13 +443,15 @@ class BatchProcessor:
                 return self._clean_pdf_annotation(content)
             
             # Extract PDF content
-            pdf_content = extract_pdf(pdf_path, max_pages=20, max_chars=8000)
+            pdf_result = extract_pdf(pdf_path, max_pages=20, max_chars=8000)
             
-            if pdf_content and len(pdf_content.strip()) > 100:
+            if pdf_result and pdf_result.get('text') and len(pdf_result['text'].strip()) > 100:
                 # Add PDF content to the note while preserving original structure
-                enhanced_content = content + "\n\n## PDF Content\n\n" + pdf_content
+                pdf_text = pdf_result['text']
+                enhanced_content = content + "\n\n## PDF Content\n\n" + pdf_text
                 result['pdf_extracted'] = True
-                result['pdf_content_length'] = len(pdf_content)
+                result['pdf_content_length'] = len(pdf_text)
+                result['pdf_pages'] = pdf_result.get('pages', 0)
                 return enhanced_content
             else:
                 result['pdf_extraction_warning'] = "PDF content extraction failed or returned minimal content"
@@ -511,6 +535,7 @@ class BatchProcessor:
             'total_references': 0,
             'valid_references': 0,
             'missing_attachments': [],
+            'invalid_filenames': [],
             'all_valid': True
         }
         
@@ -522,11 +547,22 @@ class BatchProcessor:
         validation['total_references'] = len(references)
         
         for ref in references:
-            attachment_path = self.output_attachments_path / ref
-            if attachment_path.exists():
-                validation['valid_references'] += 1
-            else:
-                validation['missing_attachments'].append(ref)
+            # Check for extremely long filenames (filesystem limit is usually 255 chars)
+            if len(ref) > 200:
+                validation['invalid_filenames'].append(f"Filename too long ({len(ref)} chars): {ref[:50]}...")
+                validation['all_valid'] = False
+                continue
+                
+            try:
+                attachment_path = self.output_attachments_path / ref
+                if attachment_path.exists():
+                    validation['valid_references'] += 1
+                else:
+                    validation['missing_attachments'].append(ref)
+                    validation['all_valid'] = False
+            except OSError as e:
+                # Handle filesystem errors like filename too long
+                validation['invalid_filenames'].append(f"Filesystem error: {str(e)[:100]}...")
                 validation['all_valid'] = False
         
         return validation
@@ -537,6 +573,7 @@ class BatchProcessor:
             'total_references': 0,
             'valid_references': 0,
             'missing_attachments': [],
+            'invalid_filenames': [],
             'all_valid': True
         }
         
@@ -548,12 +585,23 @@ class BatchProcessor:
         validation['total_references'] = len(references)
         
         for ref in references:
-            # Check in original vault attachments folder
-            attachment_path = self.vault_attachments_path / ref
-            if attachment_path.exists():
-                validation['valid_references'] += 1
-            else:
-                validation['missing_attachments'].append(ref)
+            # Check for extremely long filenames (filesystem limit is usually 255 chars)
+            if len(ref) > 200:
+                validation['invalid_filenames'].append(f"Filename too long ({len(ref)} chars): {ref[:50]}...")
+                validation['all_valid'] = False
+                continue
+                
+            try:
+                # Check in original vault attachments folder
+                attachment_path = self.vault_attachments_path / ref
+                if attachment_path.exists():
+                    validation['valid_references'] += 1
+                else:
+                    validation['missing_attachments'].append(ref)
+                    validation['all_valid'] = False
+            except OSError as e:
+                # Handle filesystem errors like filename too long
+                validation['invalid_filenames'].append(f"Filesystem error: {str(e)[:100]}...")
                 validation['all_valid'] = False
         
         return validation
@@ -582,6 +630,20 @@ class BatchProcessor:
                 'stage': failed.get('stage', 'unknown')
             })
     
+    def _print_progress_report(self):
+        """Print progress report."""
+        total = self.stats['total_files']
+        processed = self.stats['processed_files']
+        failed = self.stats['failed_files']
+        skipped = self.stats['skipped_files']
+        completed = processed + failed + skipped
+        
+        progress_pct = (completed / total * 100) if total > 0 else 0
+        success_pct = (processed / completed * 100) if completed > 0 else 0
+        
+        print(f"  Progress: {completed}/{total} files ({progress_pct:.1f}%)")
+        print(f"  Success rate: {processed}/{completed} ({success_pct:.1f}%)")
+        print(f"  Failed: {failed}, Skipped: {skipped}")
     
     def _finalize_results(self, start_time: float) -> Dict:
         """Finalize processing results."""
@@ -676,3 +738,61 @@ class BatchProcessor:
             'success_count': sum(1 for r in results if r['status'] == 'processed'),
             'failure_count': sum(1 for r in results if r['status'] == 'failed')
         }
+    
+    def process_incremental(self, dry_run: bool = False) -> Dict:
+        """Process only notes that need preprocessing (incremental processing)."""
+        print("=== INCREMENTAL PREPROCESSING ===")
+        
+        # Get notes that need preprocessing
+        notes_needing_processing = [Path(p) for p in self.register.get_notes_needing_processing('preprocessing', str(self.vault_path))]
+        
+        if not notes_needing_processing:
+            print("✅ No notes need preprocessing. All notes are up to date!")
+            return {
+                'total_files': 0,
+                'processed_files': 0,
+                'failed_files': 0,
+                'processing_time': 0,
+                'incremental': True
+            }
+        
+        print(f"Found {len(notes_needing_processing)} notes needing preprocessing")
+        
+        if not dry_run:
+            self._handle_attachments_folder()
+        
+        start_time = time.time()
+        self.stats = {
+            'total_files': len(notes_needing_processing),
+            'processed_files': 0,
+            'failed_files': 0,
+            'processing_time': 0
+        }
+        
+        # Process notes in batches
+        batch_results = []
+        total_batches = (len(notes_needing_processing) + self.batch_size - 1) // self.batch_size
+        
+        for i in range(0, len(notes_needing_processing), self.batch_size):
+            batch = notes_needing_processing[i:i + self.batch_size]
+            batch_num = i // self.batch_size + 1
+            
+            print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)...")
+            
+            batch_result = self._process_batch(batch, dry_run, None)
+            batch_results.append(batch_result)
+            
+            # Update stats
+            self.stats['processed_files'] += len(batch_result['processed'])
+            self.stats['failed_files'] += len(batch_result['failed'])
+        
+        # Finalize results
+        self.stats['processing_time'] = time.time() - start_time
+        
+        print(f"\nIncremental preprocessing complete:")
+        print(f"  Total notes needing processing: {self.stats['total_files']}")
+        print(f"  Successfully processed: {self.stats['processed_files']}")
+        print(f"  Failed: {self.stats['failed_files']}")
+        print(f"  Processing time: {self.stats['processing_time']:.2f} seconds")
+        
+        return self.stats

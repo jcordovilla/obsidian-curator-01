@@ -58,6 +58,8 @@ def write_curated_note(note_path, meta, cats, tags, ents, summary, content, scor
     
     # Copy attachments to curated folder
     copy_attachments_to_curated(note_path, cfg, preprocessed_attachments)
+    
+    return out
 
 
 def copy_attachments_to_curated(note_path, cfg, preprocessed_attachments):
@@ -67,41 +69,41 @@ def copy_attachments_to_curated(note_path, cfg, preprocessed_attachments):
         curated_notes = cfg['paths']['out_notes']
         curated_attachments = os.path.join(os.path.dirname(curated_notes), 'attachments')
         
-        # Get note name with extension (attachment folders use full filename)
+        # Get note name with and without extension
         note_filename = pathlib.Path(note_path).name
+        note_stem = pathlib.Path(note_path).stem
         
-        # Look for attachment folder in preprocessed
-        attachment_folder = os.path.join(preprocessed_attachments, f"{note_filename}.resources")
+        # Convert note name to the pattern used in attachment references
+        # Replace spaces and special characters with underscores, keep extension
+        attachment_folder_name = note_filename.replace(' ', '_').replace('.md', '.resources')
         
-        if os.path.exists(attachment_folder):
-            # Create curated attachments directory
-            os.makedirs(curated_attachments, exist_ok=True)
-            
-            # Copy the attachment folder
-            curated_attachment_folder = os.path.join(curated_attachments, f"{note_filename}.resources")
-            if os.path.exists(curated_attachment_folder):
-                shutil.rmtree(curated_attachment_folder)
-            
-            shutil.copytree(attachment_folder, curated_attachment_folder)
-            print(f"✓ Copied attachments for {note_filename}")
-        else:
-            # Check for alternative attachment locations
-            alt_locations = [
-                os.path.join(preprocessed_attachments, note_filename),
-                os.path.join(preprocessed_attachments, f"{note_filename}_files"),
-                os.path.join(preprocessed_attachments, f"{note_filename}_attachments")
-            ]
-            
-            for alt_location in alt_locations:
-                if os.path.exists(alt_location):
-                    os.makedirs(curated_attachments, exist_ok=True)
-                    curated_attachment_folder = os.path.join(curated_attachments, f"{note_filename}.resources")
-                    if os.path.exists(curated_attachment_folder):
-                        shutil.rmtree(curated_attachment_folder)
-                    
-                    shutil.copytree(alt_location, curated_attachment_folder)
-                    print(f"✓ Copied attachments for {note_filename} from {os.path.basename(alt_location)}")
-                    break
+        # Try different naming patterns (in order of likelihood)
+        source_patterns = [
+            attachment_folder_name,  # Full filename with .resources (most common)
+            f"{note_filename.replace(' ', '_')}.resources",  # With underscores, keep .md
+            f"{note_stem}.resources",  # Original pattern without extension
+            f"{note_filename}.resources",  # With original spaces
+            f"{note_stem}_files",
+            f"{note_stem}_attachments"
+        ]
+        
+        for pattern in source_patterns:
+            source_path = os.path.join(preprocessed_attachments, pattern)
+            if os.path.exists(source_path):
+                # Create curated attachments directory
+                os.makedirs(curated_attachments, exist_ok=True)
+                
+                # Use the same pattern for destination (maintain consistency)
+                dest_path = os.path.join(curated_attachments, attachment_folder_name)
+                if os.path.exists(dest_path):
+                    shutil.rmtree(dest_path)
+                
+                shutil.copytree(source_path, dest_path)
+                print(f"✓ Copied attachments for {note_filename}")
+                return
+        
+        # If no pattern matched, log the failure
+        print(f"Warning: No attachment folder found for {note_filename}")
     
     except Exception as e:
         print(f"Warning: Failed to copy attachments for {note_filename}: {e}")
@@ -171,3 +173,5 @@ def write_triage_note(note_path, meta, cats, tags, ents, content, score, cfg, pr
     
     # Copy attachments if they exist
     copy_attachments_to_curated(note_path, cfg, preprocessed_attachments)
+    
+    return out
