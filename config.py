@@ -7,9 +7,9 @@ import yaml
 from pathlib import Path
 
 # Vault configuration
-RAW_VAULT_PATH = "/Users/jose/Documents/Obsidian/Evermd"  # Original notes + attachments
-PREPROCESSED_VAULT_PATH = "/Users/jose/Documents/Obsidian/Ever-preprocessed"  # Cleaned notes + attachments
-CURATED_VAULT_PATH = "/Users/jose/Documents/Obsidian/Ever-curated"  # Enhanced notes + attachments
+RAW_VAULT_PATH = "/Users/jose/obsidian/Evermd"  # Original notes + attachments
+PREPROCESSED_VAULT_PATH = "/Users/jose/obsidian/Ever-preprocessed"  # Cleaned notes + attachments
+CURATED_VAULT_PATH = "/Users/jose/obsidian/Ever-curated"  # Enhanced notes + attachments
 
 # Test data configuration
 TEST_RAW_PATH = "tests/test_data/raw"  # Test raw notes + attachments

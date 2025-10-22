@@ -12,18 +12,18 @@ models:
   main: gpt-5-2025-08-07
   provider: openai
 paths:
-  attachments: /Users/jose/Documents/Obsidian/Ever-preprocessed/attachments
-  curated_attachments: /Users/jose/Documents/Obsidian/Ever-curated/attachments
-  curated_notes: /Users/jose/Documents/Obsidian/Ever-curated/notes
-  curated_vault: /Users/jose/Documents/Obsidian/Ever-curated
-  out_assets: /Users/jose/Documents/Obsidian/Ever-curated/attachments
-  out_notes: /Users/jose/Documents/Obsidian/Ever-curated/notes
-  preprocessed_attachments: /Users/jose/Documents/Obsidian/Ever-preprocessed/attachments
-  preprocessed_notes: /Users/jose/Documents/Obsidian/Ever-preprocessed/notes
-  preprocessed_vault: /Users/jose/Documents/Obsidian/Ever-preprocessed
-  raw_attachments: /Users/jose/Documents/Obsidian/Evermd/attachments
-  raw_notes: /Users/jose/Documents/Obsidian/Evermd/notes
-  raw_vault: /Users/jose/Documents/Obsidian/Evermd
+  attachments: /Users/jose/obsidian/Ever-preprocessed/attachments
+  curated_attachments: /Users/jose/obsidian/Ever-curated/attachments
+  curated_notes: /Users/jose/obsidian/Ever-curated/notes
+  curated_vault: /Users/jose/obsidian/Ever-curated
+  out_assets: /Users/jose/obsidian/Ever-curated/attachments
+  out_notes: /Users/jose/obsidian/Ever-curated/notes
+  preprocessed_attachments: /Users/jose/obsidian/Ever-preprocessed/attachments
+  preprocessed_notes: /Users/jose/obsidian/Ever-preprocessed/notes
+  preprocessed_vault: /Users/jose/obsidian/Ever-preprocessed
+  raw_attachments: /Users/jose/obsidian/Evermd/attachments
+  raw_notes: /Users/jose/obsidian/Evermd/notes
+  raw_vault: /Users/jose/obsidian/Evermd
   test_curated_attachments: tests/test_data/curated/attachments
   test_curated_notes: tests/test_data/curated/notes
   test_curated_vault: tests/test_data/curated
@@ -33,7 +33,7 @@ paths:
   test_raw_attachments: tests/test_data/raw/attachments
   test_raw_notes: tests/test_data/raw/notes
   test_raw_vault: tests/test_data/raw
-  vault: /Users/jose/Documents/Obsidian/Ever-preprocessed
+  vault: /Users/jose/obsidian/Ever-preprocessed
 priorities:
 - pdf
 - text
