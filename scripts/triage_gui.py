@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 import re
 from typing import List, Dict, Optional
+import threading
 
 # Add src to path to import config
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -335,8 +336,12 @@ class TriageGUI:
         destination_note = os.path.join(self.notes_folder, note_filename)
         
         try:
-            # Move note to notes folder
-            shutil.move(current_note, destination_note)
+            # Show processing status
+            self.status_label.config(text="Processing with curation pipeline...", foreground="blue")
+            self.root.update()
+            
+            # Run curation pipeline on the note to enrich it with summaries and extracted content
+            self._curate_note(current_note, destination_note)
             
             # Copy attachments if they exist
             self._copy_attachments(note_filename)
@@ -401,6 +406,78 @@ class TriageGUI:
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to discard note: {str(e)}")
+    
+    def _curate_note(self, source_note_path: str, destination_path: str):
+        """Run the curation pipeline on a triage note to enrich it with summaries and extracted content."""
+        try:
+            # Try to import curation functions dynamically
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+            from config import get_curation_config
+            from src.curation.obsidian_curator import utils, extractors, classify, summarize, writer, detector
+            
+            # Get curation config
+            cfg = get_curation_config()
+            
+            # Parse the note
+            meta, body = utils.parse_front_matter(source_note_path)
+            attachments = cfg['paths']['preprocessed_attachments']
+            assets = detector.detect_assets(body, attachments)
+            primary = detector.choose_primary(assets, body, cfg['priorities'])
+            
+            # Skip audio files for now (placeholder transcription not useful)
+            if primary['kind'] == 'audio':
+                print("Skipping audio file - not yet supported")
+                shutil.move(source_note_path, destination_path)
+                return
+            
+            # Extract content (this processes PDFs, images, etc.)
+            content = extractors.extract_content(primary, assets, body, meta.get('language'), attachments, source_note_path)
+            
+            # Classify the note
+            cats, tags, ents, pub_readiness = classify.classify_json(content, meta, cfg)
+            
+            # Generate professional summary
+            summary = summarize.summarize_content(content, meta, cats, cfg)
+            
+            # Calculate usefulness score (use a high score since user manually accepted it)
+            score = 0.8  # High score for manually accepted notes
+            
+            # Write the curated note
+            writer.write_curated_note(
+                note_path=source_note_path,
+                meta=meta,
+                cats=cats,
+                tags=tags,
+                ents=ents,
+                summary=summary,
+                content=content,
+                score=score,
+                cfg=cfg,
+                preprocessed_attachments=cfg['paths']['preprocessed_attachments']
+            )
+            
+            # The write_curated_note function writes to the configured output path
+            # We need to move it to our destination
+            output_path = os.path.join(cfg['paths']['out_notes'], os.path.basename(source_note_path))
+            if os.path.exists(output_path):
+                if os.path.exists(destination_path):
+                    os.remove(destination_path)
+                shutil.move(output_path, destination_path)
+            else:
+                # If for some reason the file wasn't created, just copy the original
+                print(f"Warning: Curated note not found at {output_path}, copying original")
+                shutil.copy2(source_note_path, destination_path)
+                os.remove(source_note_path)
+            
+            self.status_label.config(text="✓ Note enriched with AI analysis", foreground="green")
+            print(f"✓ Curation complete for {os.path.basename(source_note_path)}")
+            
+        except Exception as e:
+            print(f"Error during curation: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # DO NOT move the file - curation must succeed
+            raise Exception(f"Curation failed - note not moved. Error: {str(e)}")
     
     def _copy_attachments(self, note_filename: str):
         """Copy attachments for the given note from preprocessed to curated."""
