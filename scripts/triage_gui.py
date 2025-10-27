@@ -49,6 +49,10 @@ class TriageGUI:
         self.accepted_count = 0
         self.discarded_count = 0
         
+        # Processing state
+        self.is_processing = False
+        self.processing_thread = None
+        
         # Create folders if they don't exist
         self._ensure_folders_exist()
         
@@ -331,26 +335,51 @@ class TriageGUI:
         if not self.triage_notes or self.current_note_index >= len(self.triage_notes):
             return
         
+        # Prevent multiple simultaneous processing
+        if self.is_processing:
+            return
+        
         current_note = self.triage_notes[self.current_note_index]
         note_filename = os.path.basename(current_note)
         destination_note = os.path.join(self.notes_folder, note_filename)
         
+        # Start processing in background thread
+        self.is_processing = True
+        self.status_label.config(text="Processing with curation pipeline... (this may take 30-60 seconds)", foreground="blue")
+        self.root.update()
+        
+        # Disable buttons while processing
+        self._set_buttons_state("disabled")
+        
+        def process_note():
+            """Process the note in background thread."""
+            try:
+                # Run curation pipeline on the note
+                self._curate_note(current_note, destination_note)
+                
+                # Copy attachments if they exist
+                self._copy_attachments(note_filename)
+                
+                # Update GUI in main thread
+                self.root.after(0, self._complete_accept, note_filename)
+                
+            except Exception as e:
+                error_msg = str(e)
+                self.root.after(0, self._processing_failed, error_msg)
+        
+        # Start background thread
+        self.processing_thread = threading.Thread(target=process_note, daemon=True)
+        self.processing_thread.start()
+    
+    def _complete_accept(self, note_filename: str):
+        """Complete the accept operation in the main thread."""
         try:
-            # Show processing status
-            self.status_label.config(text="Processing with curation pipeline...", foreground="blue")
-            self.root.update()
-            
-            # Run curation pipeline on the note to enrich it with summaries and extracted content
-            self._curate_note(current_note, destination_note)
-            
-            # Copy attachments if they exist
-            self._copy_attachments(note_filename)
-            
             # Increment accepted count
             self.accepted_count += 1
             
             # Remove from triage list
-            self.triage_notes.pop(self.current_note_index)
+            note_index_to_remove = self.current_note_index
+            self.triage_notes.pop(note_index_to_remove)
             
             # Adjust index if necessary
             if self.current_note_index >= len(self.triage_notes) and self.triage_notes:
@@ -368,7 +397,22 @@ class TriageGUI:
                 self._show_no_notes_message()
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to accept note: {str(e)}")
+            messagebox.showerror("Error", f"Failed to complete accept: {str(e)}")
+        finally:
+            self.is_processing = False
+            self._set_buttons_state("normal")
+    
+    def _processing_failed(self, error_msg: str):
+        """Handle processing failure."""
+        self.is_processing = False
+        self._set_buttons_state("normal")
+        self.status_label.config(text="✗ Processing failed", foreground="red")
+        messagebox.showerror("Error", f"Failed to accept note: {error_msg}")
+    
+    def _set_buttons_state(self, state: str):
+        """Enable or disable control buttons."""
+        # This will be implemented to disable/enable buttons during processing
+        pass
     
     def _discard_note(self):
         """Discard the current note - move to discarded folder."""
@@ -443,7 +487,7 @@ class TriageGUI:
             score = 0.8  # High score for manually accepted notes
             
             # Write the curated note
-            writer.write_curated_note(
+            output_path = writer.write_curated_note(
                 note_path=source_note_path,
                 meta=meta,
                 cats=cats,
@@ -457,20 +501,20 @@ class TriageGUI:
             )
             
             # The write_curated_note function writes to the configured output path
-            # We need to move it to our destination
-            output_path = os.path.join(cfg['paths']['out_notes'], os.path.basename(source_note_path))
+            # Since cfg['paths']['out_notes'] is the same as our destination, it should already be there
+            # Just verify it exists and remove the source
             if os.path.exists(output_path):
-                if os.path.exists(destination_path):
-                    os.remove(destination_path)
-                shutil.move(output_path, destination_path)
+                # Remove the source note from triage folder
+                if os.path.exists(source_note_path):
+                    os.remove(source_note_path)
+                print(f"✓ Curation complete for {os.path.basename(source_note_path)}")
+                print(f"✓ Output written to: {output_path}")
             else:
-                # If for some reason the file wasn't created, just copy the original
-                print(f"Warning: Curated note not found at {output_path}, copying original")
-                shutil.copy2(source_note_path, destination_path)
-                os.remove(source_note_path)
+                # This should not happen, but handle it gracefully
+                print(f"Error: Curated note not found at {output_path}")
+                raise Exception(f"Curation output not found at {output_path}")
             
             self.status_label.config(text="✓ Note enriched with AI analysis", foreground="green")
-            print(f"✓ Curation complete for {os.path.basename(source_note_path)}")
             
         except Exception as e:
             print(f"Error during curation: {str(e)}")
