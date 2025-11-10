@@ -188,9 +188,15 @@ def copy_attachment(src: Path, dest_dir: Path, dry_run: bool = True, normalize: 
     return dest
 
 
-def insert_link_after_snippet(note_path: Path, snippet: str, link_text: str, link_path: str, dry_run: bool = True) -> bool:
-    """Insert a markdown link right after the first occurrence of snippet in the note.
-
+def insert_link_after_snippet(note_path: Path, snippet: str, link_paths: List[str], dry_run: bool = True) -> bool:
+    """Insert markdown links right after the first occurrence of snippet in the note.
+    
+    Args:
+        note_path: path to the note file
+        snippet: the snippet to find
+        link_paths: list of relative paths to link to (one per PDF)
+        dry_run: if True, only print planned action
+    
     Returns True if modification was (or would be) made, False otherwise.
     """
     text = note_path.read_text(encoding="utf-8")
@@ -199,29 +205,33 @@ def insert_link_after_snippet(note_path: Path, snippet: str, link_text: str, lin
         return False
 
     # find location to insert: after the snippet's line
-    # we'll insert a newline + markdown link if not already present
     insert_pos = idx + len(snippet)
 
-    # see if a link to the target already exists right after snippet
-    remainder = text[insert_pos: insert_pos + 200]  # look ahead
-    if link_path in remainder:
-        print(f"Link already present in {note_path}")
+    # construct markdown links for all PDFs
+    # check if any link already exists to avoid duplicates
+    remainder = text[insert_pos: insert_pos + 500]
+    existing_links = [lp for lp in link_paths if lp in remainder]
+    if existing_links:
+        print(f"Link(s) already present in {note_path}")
         return False
 
-    # construct markdown link. To avoid absolute paths, we'll insert the provided link_path as-is.
-    md_link = f"\n\n[PDF Attachment]({link_path})\n"
+    # build link block: one per path
+    md_links = "\n".join([f"\n[PDF Attachment]({lp})" for lp in link_paths])
+    md_links += "\n"
 
-    new_text = text[:insert_pos] + md_link + text[insert_pos:]
+    new_text = text[:insert_pos] + md_links + text[insert_pos:]
 
     if dry_run:
-        print(f"[dry-run] Would insert link into {note_path}: {md_link.strip()}")
+        print(f"[dry-run] Would insert links into {note_path}:")
+        for lp in link_paths:
+            print(f"  [PDF Attachment]({lp})")
     else:
         # make a simple backup
         bak = note_path.with_suffix(note_path.suffix + ".bak")
         note_path.replace(note_path)  # touch, avoid flake
         shutil.copy2(note_path, bak)
         note_path.write_text(new_text, encoding="utf-8")
-        print(f"Inserted link into {note_path}; backup at {bak}")
+        print(f"Inserted {len(link_paths)} link(s) into {note_path}; backup at {bak}")
     return True
 
 
@@ -260,14 +270,12 @@ def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Pa
             dest = copy_attachment(pdf, dest_attachments, dry_run=dry_run, normalize=normalize)
             copied_paths.append(dest)
 
-        # choose first copied path for linking (if multiple, you could add all)
-        first_dest = copied_paths[0] if copied_paths else None
-        if first_dest:
-            # compute relative path from note to destination file for nicer markdown link
-            rel = os.path.relpath(str(first_dest), start=str(note.parent))
-            inserted = insert_link_after_snippet(note, SNIPPET, "PDF Attachment", rel, dry_run=dry_run)
+        # compute relative paths for all copied attachments and insert links for ALL
+        if copied_paths:
+            rel_paths = [os.path.relpath(str(dest), start=str(note.parent)) for dest in copied_paths]
+            inserted = insert_link_after_snippet(note, SNIPPET, rel_paths, dry_run=dry_run)
             if inserted:
-                results.append((note, pdfs, first_dest))
+                results.append((note, pdfs, copied_paths[0]))
                 # move the backup file created by insert_link_after_snippet
                 bak = note.with_suffix(note.suffix + ".bak")
                 move_backup_file(bak, backup_folder, dry_run=dry_run)
