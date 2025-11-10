@@ -33,6 +33,36 @@ PDF_EXTS = {".pdf", ".PDF"}
 DEFAULT_BACKUP_FOLDER = "/Users/jose/obsidian/JC/Attachments/.backups"
 
 
+def normalize_filename(filename: str) -> str:
+    """
+    Normalize a filename by removing problematic characters and patterns.
+    
+    - Strips encoded query strings (e.g., "-uri=...", "?format=PDF", etc.)
+    - Replaces generic "unknown_filename" with a placeholder or removes suffix
+    - Removes or replaces special URL-like patterns
+    - Keeps alphanumerics, spaces, dots, hyphens, underscores
+    """
+    name = filename
+    
+    # Remove common URL query/parameter patterns
+    name = re.sub(r'[-&]uri=.*?(?=\.|$)', '', name)  # -uri=... or &uri=...
+    name = re.sub(r'[\?\&]format=[^\s.]*', '', name)  # ?format=PDF or &format=...
+    name = re.sub(r'[\?\&]view=fimg.*?(?=\.|$)', '', name)  # view=fimg pattern
+    name = re.sub(r'[\?\&](th|from|to|ik|ui)=[^\s.]*', '', name)  # other param patterns
+    
+    # Clean up sequences of invalid chars that may have been left behind
+    name = re.sub(r'[\?\&]+', '', name)
+    name = re.sub(r'--+', '-', name)  # collapse multiple dashes
+    name = name.strip('-. ')  # trim dashes, dots, spaces
+    
+    # If filename is just a generic name or too short, keep it as-is
+    # (User can decide if they want to skip these)
+    if not name or name.lower() in ('unknown', 'unnamed', 'document'):
+        return filename
+    
+    return name
+
+
 def find_notes_with_snippet(notes_root: Path, snippet: str = SNIPPET) -> List[Path]:
     notes = []
     for p in notes_root.rglob("*.md"):
@@ -46,7 +76,7 @@ def find_notes_with_snippet(notes_root: Path, snippet: str = SNIPPET) -> List[Pa
     return notes
 
 
-def find_pdfs_for_note(attachments_root: Path, note_path: Path) -> List[Path]:
+def find_pdfs_for_note(attachments_root: Path, note_path: Path, evermd_root: Optional[Path] = None) -> List[Path]:
     """
     Heuristic search for PDFs related to a note.
 
@@ -56,21 +86,53 @@ def find_pdfs_for_note(attachments_root: Path, note_path: Path) -> List[Path]:
     - If none found, look for any PDFs whose filenames contain the basename.
     - Return full paths to PDF files (can be empty list).
     """
+
     basename = note_path.stem
     results: List[Path] = []
 
-    # 1) search for <basename>*.resources directories
-    for folder in attachments_root.rglob(f"{basename}*.resources"):
-        if folder.is_dir():
-            for f in folder.rglob("*"):
-                if f.suffix in PDF_EXTS and f.is_file():
-                    results.append(f)
+    # First, if an Evermd root was supplied, try to find the corresponding note there
+    # and extract Obsidian embed links like: ![[attachments/....pdf]]
+    if evermd_root is not None:
+        try:
+            for candidate in evermd_root.rglob(note_path.name):
+                if candidate.is_file():
+                    try:
+                        content = candidate.read_text(encoding="utf-8")
+                    except Exception:
+                        content = candidate.read_text(encoding="utf-8", errors="ignore")
+                    # find embeds starting with attachments/
+                    matches = re.findall(r"!\[\[attachments/([^\]\|]+)", content)
+                    for m in matches:
+                        # m may be a path like "Some Note.resources/file.pdf" or just "file.pdf"
+                        candidate_path = attachments_root / m
+                        if candidate_path.exists():
+                            results.append(candidate_path)
+                        else:
+                            # fallback: search attachments_root for the filename
+                            fn = Path(m).name
+                            for f in attachments_root.rglob(fn):
+                                if f.suffix in PDF_EXTS:
+                                    results.append(f)
+                    if results:
+                        break
+        except Exception:
+            # ignore errors here and fall back to original heuristics
+            pass
 
-    # 2) if none found, look for PDFs with basename in filename
+    # If still nothing, fall back to heuristics used previously
     if not results:
-        for f in attachments_root.rglob("*.*"):
-            if f.suffix in PDF_EXTS and basename in f.name:
-                results.append(f)
+        # 1) search for <basename>*.resources directories
+        for folder in attachments_root.rglob(f"{basename}*.resources"):
+            if folder.is_dir():
+                for f in folder.rglob("*"):
+                    if f.suffix in PDF_EXTS and f.is_file():
+                        results.append(f)
+
+        # 2) if none found, look for PDFs with basename in filename
+        if not results:
+            for f in attachments_root.rglob("*.*"):
+                if f.suffix in PDF_EXTS and basename in f.name:
+                    results.append(f)
 
     # 3) de-dupe
     uniq = []
@@ -82,13 +144,34 @@ def find_pdfs_for_note(attachments_root: Path, note_path: Path) -> List[Path]:
     return uniq
 
 
-def copy_attachment(src: Path, dest_dir: Path, dry_run: bool = True) -> Path:
+def copy_attachment(src: Path, dest_dir: Path, dry_run: bool = True, normalize: bool = True) -> Path:
+    """
+    Copy an attachment to a destination directory.
+    
+    Args:
+        src: source file path
+        dest_dir: destination directory
+        dry_run: if True, only print planned action
+        normalize: if True, apply filename normalization to remove URL encodings, etc.
+    
+    Returns:
+        Path to destination file (or planned destination if dry_run)
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / src.name
-    # if target exists, add numeric suffix
-    if dest.exists():
+    
+    # Apply normalization if requested
+    dest_name = src.name
+    if normalize:
         base = src.stem
         ext = src.suffix
+        normalized_base = normalize_filename(base)
+        dest_name = f"{normalized_base}{ext}"
+    
+    dest = dest_dir / dest_name
+    # if target exists, add numeric suffix
+    if dest.exists():
+        base = dest.stem
+        ext = dest.suffix
         i = 1
         while True:
             candidate = dest_dir / f"{base}-{i}{ext}"
@@ -142,7 +225,7 @@ def insert_link_after_snippet(note_path: Path, snippet: str, link_text: str, lin
     return True
 
 
-def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Path, backup_folder: Optional[Path] = None, sample: Optional[int] = None, dry_run: bool = True) -> List[Tuple[Path, List[Path], Path]]:
+def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Path, backup_folder: Optional[Path] = None, evermd_root: Optional[Path] = None, sample: Optional[int] = None, dry_run: bool = True, normalize: bool = True) -> List[Tuple[Path, List[Path], Path]]:
     """
     Process notes and return a list of tuples: (note_path, pdf_sources, copied_dest)
     For notes with multiple PDFs, returns the first copied dest for the tuple; adjust if needed.
@@ -150,6 +233,7 @@ def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Pa
     Also handles:
     - Moving .md.bak backup files to backup_folder
     - Renaming notes without PDFs to add ACTION- prefix and copying their backups
+    - Normalizing filenames to remove URL encodings and other problematic patterns
     """
     if backup_folder is None:
         backup_folder = Path(DEFAULT_BACKUP_FOLDER)
@@ -165,7 +249,7 @@ def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Pa
     notes_without_attachments = []
     
     for note in notes:
-        pdfs = find_pdfs_for_note(attachments_root, note)
+        pdfs = find_pdfs_for_note(attachments_root, note, evermd_root=evermd_root)
         if not pdfs:
             notes_without_attachments.append(note)
             print(f"No PDFs found for note: {note}")
@@ -173,7 +257,7 @@ def process_notes(notes_root: Path, attachments_root: Path, dest_attachments: Pa
 
         copied_paths = []
         for pdf in pdfs:
-            dest = copy_attachment(pdf, dest_attachments, dry_run=dry_run)
+            dest = copy_attachment(pdf, dest_attachments, dry_run=dry_run, normalize=normalize)
             copied_paths.append(dest)
 
         # choose first copied path for linking (if multiple, you could add all)
@@ -255,15 +339,19 @@ def main(argv=None):
                         help="Destination folder for copied attachments")
     parser.add_argument("--backup-folder", type=Path, default=Path(DEFAULT_BACKUP_FOLDER),
                         help="Folder where backup .md.bak files and ACTION- notes will be stored")
+    parser.add_argument("--evermd-root", type=Path, default=Path("/Users/jose/obsidian/Evermd"),
+                        help="Root folder where original Evermd notes live (used to extract attachment embeds)")
     parser.add_argument("--sample", type=int, default=0, help="Process a random sample of N matching notes (0 = all)")
     parser.add_argument("--apply", action="store_true", help="Actually copy files and modify notes (default is dry-run)")
+    parser.add_argument("--no-normalize", action="store_true", help="Disable filename normalization (keep URL-encoded names)")
     parser.add_argument("--verbose", action="store_true")
 
     args = parser.parse_args(argv)
 
     dry_run = not args.apply
     results = process_notes(args.notes_root, args.attachments_root, args.dest_attachments,
-                            backup_folder=args.backup_folder, sample=(args.sample or None), dry_run=dry_run)
+                            backup_folder=args.backup_folder, evermd_root=args.evermd_root,
+                            sample=(args.sample or None), dry_run=dry_run, normalize=not args.no_normalize)
 
     print(f"Processed {len(results)} notes (dry_run={dry_run})")
 
