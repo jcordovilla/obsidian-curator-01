@@ -23,6 +23,12 @@ def test_preprocessing_pipeline():
     
     # Test paths - use real vault for sampling, test folders for output
     real_vault = "/Users/jose/Documents/Obsidian/Evermd"  # Real vault with 3,662 notes
+    
+    # Skip test if real vault is not available (CI/local without vault)
+    if not os.path.exists(real_vault):
+        print(f"⊘ Skipping test: Real vault not found at {real_vault}")
+        print("  This test requires a local vault for sampling.")
+        return None  # None indicates skip
     raw_vault = test_cfg['paths']['test_raw_vault']
     preprocessed_vault = test_cfg['paths']['test_preprocessed_vault']
     
@@ -212,11 +218,11 @@ def main():
     # Summary
     print("\nTest Results Summary:")
     print("=" * 60)
-    print(f"  Preprocessing: {'✓' if preprocessing_ok else '✗'}")
-    print(f"  Web Cleaning: {'✓' if cleaning_ok else '✗'}")
+    print(f"  Preprocessing: {'✓' if preprocessing_ok else ('⊘' if preprocessing_ok is None else '✗')}")
+    print(f"  Web Cleaning: {'✓' if cleaning_ok else ('⊘' if cleaning_ok is None else '✗')}")
     
-    if all([preprocessing_ok, cleaning_ok]):
-        print("\n✓ All preprocessing tests passed!")
+    if all([r is not False for r in [preprocessing_ok, cleaning_ok]]):
+        print("\n✓ All preprocessing tests passed (or skipped)!")
         return True
     else:
         print("\n✗ Some preprocessing tests failed!")
